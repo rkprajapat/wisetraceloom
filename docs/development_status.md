@@ -1,6 +1,6 @@
 # Trailwise SDK — Development Status
 
-Tracks progress feature-by-feature against the plan in [agentic-ai-logging-sdk-prd-foundation.md](../agentic-ai-logging-sdk-prd-foundation.md). Update this file whenever a feature moves status — it is the single source of truth for "what's built" going forward.
+Tracks progress feature-by-feature against the plan in [prd.md](prd.md). Update this file whenever a feature moves status — it is the single source of truth for "what's built" going forward.
 
 ## How to use this file
 
@@ -27,7 +27,7 @@ Tracks progress feature-by-feature against the plan in [agentic-ai-logging-sdk-p
 
 | # | Feature | Status | Acceptance Criteria | Notes |
 |---|---|---|---|---|
-| 1.1 | structlog-based capture pipeline with `contextvars` async-safety | 🔲 Not Started | Processor pipeline runs sync and async (`await logger.ainfo`); context correctly isolated across concurrent asyncio tasks | PRD §5, §Recommendations Stage 1(a) |
+| 1.1 | structlog-based capture pipeline with `contextvars` async-safety | 🏅 Certified | Processor pipeline runs sync and async (`await logger.ainfo`); context correctly isolated across concurrent asyncio tasks | PRD §5, §Recommendations Stage 1(a). Implemented in [trailwise/logging.py](../trailwise/logging.py) (`configure`, `get_logger`, `bind_context`); verified by 3 tests in [tests/test_logging_pipeline.py](../tests/test_logging_pipeline.py) — sync logging, async `ainfo` logging, and context isolation across concurrent `asyncio.gather` tasks. All passing (`uv run python -m pytest tests/`). |
 | 1.2 | Internal rich schema (agent/tool/loop/eval/cost fields) | 🔲 Not Started | Schema covers agent spans, tool spans, loop-iteration counts, eval scores, cost fields; documented and versioned | PRD §2, §7 (schema versioning) |
 | 1.3 | OTel `gen_ai.*` export adapter | 🔲 Not Started | Emits spans/metrics per `open-telemetry/semantic-conventions-genai`; honors `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` | PRD §1, §2 |
 | 1.4 | Client-side PII redaction (Presidio, structured + regex first) | 🔲 Not Started | Structured field-name redaction and regex scrubbing active by default; Presidio NER layer available; no raw PII in emitted logs for test fixtures | PRD §3 |
@@ -36,6 +36,7 @@ Tracks progress feature-by-feature against the plan in [agentic-ai-logging-sdk-p
 | 1.7 | Decorators / context managers for instrumentation (`@trace`, `with trailwise.span()`) | 🔲 Not Started | One-line integration for common call sites (LLM call, tool call, agent step) | PRD §5 |
 | 1.8 | W3C Trace Context propagation | 🔲 Not Started | `traceparent`/`tracestate` correctly propagated across process boundaries; single propagation format used throughout | PRD §5 |
 | 1.9 | Latency overhead & fail-open threshold check | 🔲 Not Started | Benchmark shows <5% added latency; chaos test confirms zero propagated exceptions to host | Stage 1 exit gate — must certify before Stage 2 work is certified |
+| 1.10 | Log destination & rotation configuration store (SQLModel/SQLite) | 🏅 Certified | Log file path and rotation settings (size threshold, time interval, backup count, compression) persisted in SQLite via SQLModel; size and time rotation triggers are independently configurable and combinable (rotates on whichever fires first); `configure()` in the capture pipeline resolves the log destination (explicit `file_path` arg → stored `log_file_path` → stdout) and, when a file is resolved, applies the stored rotation config to a real rotating file handler | PRD §5 "Log file management" (rotation, compaction, retention), extends feature 1.1. Schema in [trailwise/config.py](../trailwise/config.py) (`RotationConfig`, `get_rotation_config`, `set_rotation_config`) carries a nullable `tenant_id` column now so a per-tenant configuration manager can be layered on later without a migration — today lookups fall back tenant-specific → global default → built-in default. Handler factory in [trailwise/rotation.py](../trailwise/rotation.py) (`build_rotating_handler`, `SizeAndTimeRotatingFileHandler`). Verified by 13 tests across [tests/test_config.py](../tests/test_config.py) (incl. `log_file_path` round-trip), [tests/test_rotation.py](../tests/test_rotation.py) (handler selection, functional size rollover, forced time rollover, gzip compression), and [tests/test_logging_file_output.py](../tests/test_logging_file_output.py) (explicit `file_path`, fallback to stored `log_file_path`, explicit arg overriding stored config). All passing (18/18 full suite). Config domain intentionally scoped to log destination + rotation for this pass — level/format and other domains (PII, sampling, OTel export) remain out of scope until their owning features start. |
 
 ---
 
@@ -79,7 +80,7 @@ Tracks progress feature-by-feature against the plan in [agentic-ai-logging-sdk-p
 
 | Stage | Total Features | Certified | In Progress | Not Started |
 |---|---|---|---|---|
-| Stage 1 | 9 | 0 | 0 | 9 |
+| Stage 1 | 10 | 2 | 0 | 8 |
 | Stage 2 | 10 | 0 | 0 | 10 |
 | Stage 3 | 8 | 0 | 0 | 8 |
 

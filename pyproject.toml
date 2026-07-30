@@ -5,5 +5,16 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
-    "code-review-graph>=2.3.7",
+    "sqlmodel>=0.0.39",
+    "structlog>=26.1.0",
 ]
+
+[dependency-groups]
+dev = [
+    "code-review-graph>=2.3.7",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "strict"

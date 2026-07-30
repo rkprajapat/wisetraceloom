@@ -10,3 +10,10 @@ wheels/
 .venv
 # Added by code-review-graph
 .code-review-graph/
+
+# Runtime SQLite config store
+.trailwise/
+*.db
+*.db-journal
+
+.pytest_cache/
