@@ -1,3 +1,4 @@
+from wisetraceloom.audit_chain import anchor_commits, verify_anchor, verify_chain
 from wisetraceloom.config import set_db_path
 from wisetraceloom.crypto_shred import confirm_erasure, decrypt_for_subject, encrypt_for_subject, request_erasure
 from wisetraceloom.instrumentation import (
@@ -17,6 +18,7 @@ from wisetraceloom.tracecontext import extract_traceparent, inject_traceparent
 
 __all__ = [
     "agent_step",
+    "anchor_commits",
     "append_commit",
     "bind_context",
     "confirm_erasure",
@@ -42,4 +44,6 @@ __all__ = [
     "trace_agent_step",
     "trace_llm_call",
     "trace_tool_call",
+    "verify_anchor",
+    "verify_chain",
 ]

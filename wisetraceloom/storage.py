@@ -45,6 +45,7 @@ durable, conflict-checked write use `append_commit` directly.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import queue
 import threading
@@ -58,10 +59,52 @@ from wisetraceloom.config import get_db_path, get_engine
 from wisetraceloom.logging import get_logger
 
 
+def iso_utc(dt: datetime) -> str:
+    """`dt.isoformat()`, normalized to UTC-aware first. SQLite round-trips a
+    `datetime` via SQLAlchemy as **naive** (see module note) even when the
+    value written was timezone-aware, so a freshly-read-back `committed_at`
+    would otherwise `.isoformat()` differently (no `+00:00` suffix) than the
+    same instant did at write time — silently breaking every entry's hash
+    chain on the very next read. Every column in this module is written as
+    `datetime.now(timezone.utc)`, so treating a naive value as UTC here is
+    recovering the original meaning, not guessing it."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.isoformat()
+
+
+def compute_entry_hash(
+    prev_hash: str | None,
+    stream_id: str,
+    version: int,
+    record_type: str,
+    tenant_id: str | None,
+    committed_at_iso: str,
+    payload_json: str,
+) -> str:
+    """SHA-256 over `prev_hash` plus every field a `StorageCommit` row
+    carries — the hash-chaining primitive feature 2.3 builds on. A shared,
+    pure function (rather than inlining the formula in `append_commit`) so
+    `wisetraceloom.audit_chain`'s `verify_chain` recomputes it identically
+    when checking a stream for tampering; the two must never drift apart."""
+    material = "\n".join(
+        [prev_hash or "", stream_id, str(version), record_type, tenant_id or "", committed_at_iso, payload_json]
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
 class StorageCommit(SQLModel, table=True):
     """One immutable, versioned event appended to `stream_id`. `version` is
     monotonic per stream, starting at 1, with no gaps — the unique
-    constraint guarantees exactly-once assignment per version."""
+    constraint guarantees exactly-once assignment per version.
+
+    `prev_hash`/`entry_hash` form the tamper-evident hash chain (PRD §7,
+    feature 2.3): `entry_hash` is `compute_entry_hash` over this row's own
+    fields plus `prev_hash`, and `prev_hash` is the prior version's
+    `entry_hash` (`None` for a stream's first commit) — so re-linking or
+    editing any single entry breaks the chain from that point forward,
+    detectable by `wisetraceloom.audit_chain.verify_chain` without needing a
+    separate ledger."""
 
     __table_args__ = (UniqueConstraint("stream_id", "version", name="uq_storage_commit_stream_version"),)
 
@@ -72,6 +115,8 @@ class StorageCommit(SQLModel, table=True):
     tenant_id: str | None = Field(default=None, index=True)
     payload: str
     committed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), index=True)
+    prev_hash: str | None = Field(default=None)
+    entry_hash: str = Field(default="", index=True)
 
 
 class StorageCheckpoint(SQLModel, table=True):
@@ -179,6 +224,21 @@ def _next_version(session: Session, stream_id: str) -> int:
     return (max_version or 0) + 1
 
 
+def _prev_entry_hash(session: Session, stream_id: str, version: int) -> str | None:
+    """The prior version's `entry_hash` to chain onto, or `None` for a
+    stream's first commit. Queried fresh (not cached) every append —
+    SQLite's single-writer serialization guarantees version `V - 1` is
+    already durably committed by the time any writer succeeds at version `V`
+    (see `append_commit`'s OCC retry loop), so this is always exactly one
+    row or none, never a race; correctness of the hash chain matters more
+    here than the one extra query costs."""
+    if version == 1:
+        return None
+    return session.exec(
+        select(StorageCommit.entry_hash).where(StorageCommit.stream_id == stream_id, StorageCommit.version == version - 1)
+    ).one()
+
+
 def append_commit(
     stream_id: str,
     record_type: str,
@@ -198,12 +258,20 @@ def append_commit(
     for _ in range(max_retries):
         with Session(engine) as session:
             version = _next_version(session, stream_id)
+            prev_hash = _prev_entry_hash(session, stream_id, version)
+            committed_at = datetime.now(timezone.utc)
+            entry_hash = compute_entry_hash(
+                prev_hash, stream_id, version, record_type, tenant_id, iso_utc(committed_at), payload_json
+            )
             commit = StorageCommit(
                 stream_id=stream_id,
                 version=version,
                 record_type=record_type,
                 tenant_id=tenant_id,
                 payload=payload_json,
+                committed_at=committed_at,
+                prev_hash=prev_hash,
+                entry_hash=entry_hash,
             )
             session.add(commit)
             try:
