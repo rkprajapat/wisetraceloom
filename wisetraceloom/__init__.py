@@ -1,4 +1,5 @@
 from wisetraceloom.config import set_db_path
+from wisetraceloom.crypto_shred import confirm_erasure, decrypt_for_subject, encrypt_for_subject, request_erasure
 from wisetraceloom.instrumentation import (
     agent_step,
     llm_call,
@@ -18,7 +19,10 @@ __all__ = [
     "agent_step",
     "append_commit",
     "bind_context",
+    "confirm_erasure",
     "configure",
+    "decrypt_for_subject",
+    "encrypt_for_subject",
     "extract_traceparent",
     "fingerprint_prompt",
     "get_logger",
@@ -29,6 +33,7 @@ __all__ = [
     "read_as_of_version",
     "read_latest",
     "register_prompt_version",
+    "request_erasure",
     "set_db_path",
     "set_export_config",
     "set_redaction_config",

@@ -2031,6 +2031,7 @@ name = "wisetraceloom"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "cryptography" },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-sdk" },
     { name = "pyarrow" },
@@ -2055,6 +2056,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cryptography", specifier = ">=44.0.0" },
     { name = "en-core-web-sm", marker = "extra == 'presidio'", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "opentelemetry-api", specifier = ">=1.30.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.30.0" },
