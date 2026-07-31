@@ -1,4 +1,17 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/ -q)",
+      "Bash(./.venv/Scripts/python.exe -c \"import opentelemetry\")",
+      "Bash(./.venv/Scripts/python.exe -m pip list)",
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_otel_export.py -q)",
+      "Bash(./.venv/Scripts/python.exe -m pip index versions presidio-analyzer)",
+      "Bash(./.venv/Scripts/python.exe -c \"import presidio_analyzer, presidio_anonymizer; print\\('ok'\\)\")",
+      "Bash(./.venv/Scripts/python.exe -m spacy download en_core_web_sm)",
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_redaction.py -q)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {

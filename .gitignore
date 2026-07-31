@@ -16,4 +16,7 @@ wheels/
 *.db
 *.db-journal
 
+# Example script rotating log output
+logs/
+
 .pytest_cache/

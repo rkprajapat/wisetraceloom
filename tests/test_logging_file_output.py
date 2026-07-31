@@ -2,13 +2,14 @@ import json
 
 import pytest
 
+import trailwise.config as config
 from trailwise.config import set_rotation_config
 from trailwise.logging import bind_context, configure, get_logger
 
 
 @pytest.fixture(autouse=True)
 def _isolated_db(tmp_path, monkeypatch):
-    monkeypatch.setenv("TRAILWISE_DB_PATH", str(tmp_path / "cfg.db"))
+    monkeypatch.setattr(config, "_db_path_override", str(tmp_path / "cfg.db"))
 
 
 def _read_json_lines(path):

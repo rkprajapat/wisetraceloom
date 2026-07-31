@@ -1,5 +1,6 @@
 import pytest
 
+import trailwise.config as config
 from trailwise.config import get_rotation_config, set_rotation_config
 
 
@@ -7,7 +8,7 @@ from trailwise.config import get_rotation_config, set_rotation_config
 def _isolated_db(tmp_path, monkeypatch):
     # Each test gets its own SQLite file so the process-wide engine cache
     # (keyed by path) never leaks state between tests.
-    monkeypatch.setenv("TRAILWISE_DB_PATH", str(tmp_path / "test.db"))
+    monkeypatch.setattr(config, "_db_path_override", str(tmp_path / "test.db"))
 
 
 def test_get_rotation_config_falls_back_to_builtin_default_when_unset():

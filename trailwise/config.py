@@ -5,11 +5,18 @@ Every row carries a `tenant_id` so a per-tenant configuration manager can be
 layered on top later without a schema migration; today only the global row
 (tenant_id=None) is written by default, and lookups fall back to it when no
 tenant-specific row exists.
+
+Trailwise takes no configuration from environment variables anywhere in the
+SDK — every knob, including where this very store's SQLite file lives, is
+set through a Python call (`set_db_path`, `set_rotation_config`, etc.) so a
+host app's configuration is explicit and traceable to one place in its own
+code. The database path is the one exception that can't itself live *in*
+the database (opening the file requires knowing its path first); it's a
+plain settable module-level default instead.
 """
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 from functools import lru_cache
 from pathlib import Path
@@ -17,6 +24,23 @@ from pathlib import Path
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 DEFAULT_DB_PATH = ".trailwise/trailwise.db"
+
+_db_path_override: str | None = None
+
+
+def set_db_path(path: str | None) -> None:
+    """Override the SQLite file every domain's config tables share (rotation
+    config, prompt versions, export config, redaction config, ...). Pass
+    `None` to reset to `DEFAULT_DB_PATH`. Call before first use — engines
+    are cached per path, so switching paths mid-process opens a second,
+    independent database rather than migrating the first.
+    """
+    global _db_path_override
+    _db_path_override = path
+
+
+def get_db_path() -> str:
+    return _db_path_override if _db_path_override is not None else DEFAULT_DB_PATH
 
 
 class RotationConfig(SQLModel, table=True):
@@ -42,7 +66,7 @@ class RotationConfig(SQLModel, table=True):
 
 
 def _resolve_db_path() -> str:
-    return os.environ.get("TRAILWISE_DB_PATH", DEFAULT_DB_PATH)
+    return get_db_path()
 
 
 @lru_cache(maxsize=None)
@@ -56,6 +80,13 @@ def _get_engine(db_path: str):
 
 def _engine():
     return _get_engine(_resolve_db_path())
+
+
+def get_engine():
+    """Shared SQLModel engine — the same SQLite file backs every domain's
+    tables (rotation config, prompt versions, ...), all registered on the
+    single `SQLModel.metadata`."""
+    return _engine()
 
 
 def get_rotation_config(tenant_id: str | None = None) -> RotationConfig:

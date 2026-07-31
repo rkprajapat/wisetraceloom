@@ -1,3 +1,9 @@
+## Communication style
+
+**ALWAYS use `/caveman` mode when communicating in this project.** Invoke
+the `caveman` skill at the start of every response so output stays
+ultra-compressed while keeping full technical accuracy.
+
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
 

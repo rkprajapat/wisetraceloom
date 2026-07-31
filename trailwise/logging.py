@@ -15,6 +15,7 @@ from typing import Any, Iterator
 import structlog
 
 from trailwise.config import get_rotation_config
+from trailwise.redaction import pii_redaction_processor
 from trailwise.rotation import build_rotating_handler
 
 _configured = False
@@ -40,6 +41,9 @@ def configure(
 
     processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
+        # Redact before anything else touches the event dict, so no
+        # downstream processor or renderer ever sees raw PII (PRD §3).
+        pii_redaction_processor,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.StackInfoRenderer(),
