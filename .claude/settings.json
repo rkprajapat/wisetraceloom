@@ -12,9 +12,7 @@
       "Bash(./.venv/Scripts/python.exe -m pytest tests/test_redaction.py -q)",
       "Bash(git mv *)",
       "Bash(git checkout *)",
-      "Bash(uv lock *)",
-      "Bash(rm -f dist/wisetraceloom-0.1.0-py3-none-any.whl dist/wisetraceloom-0.1.0.tar.gz)",
-      "Bash(rm -rf .wisetraceloom)"
+      "Bash(uv lock *)"
     ]
   },
   "hooks": {
