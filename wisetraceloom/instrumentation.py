@@ -33,6 +33,7 @@ from wisetraceloom.failsafe import fail_open_context
 from wisetraceloom.logging import get_logger
 from wisetraceloom.otel_export import export_agent_span, export_llm_span, export_tool_span
 from wisetraceloom.schema import AgentSpan, LLMSpan, ToolSpan
+from wisetraceloom.storage import enqueue_append
 from wisetraceloom.tracecontext import (
     bound_trace_context,
     current_span_id,
@@ -51,9 +52,23 @@ _SPAN_EVENT_NAMES = {
 
 
 def _emit_span(span: AgentSpan | ToolSpan | LLMSpan, exporter: Callable[..., None]) -> None:
+    event_name = _SPAN_EVENT_NAMES[type(span)]
     with fail_open_context(f"emit_span:{type(span).__name__}"):
-        get_logger("wisetraceloom.spans").info(_SPAN_EVENT_NAMES[type(span)], **span.model_dump(mode="json"))
+        get_logger("wisetraceloom.spans").info(event_name, **span.model_dump(mode="json"))
         exporter(span)
+    # Independent fail-open block: a storage failure never blocks (or is
+    # blocked by) the log/export step above, and vice versa. enqueue_append
+    # (not append_commit) is used here deliberately — a synchronous durable
+    # write costs a few ms even on a fast SQLite path, which doesn't fit the
+    # Stage 1 exit gate's <5% latency budget on every span (see storage.py's
+    # module docstring for the durability trade-off this implies).
+    with fail_open_context(f"store_span:{type(span).__name__}"):
+        enqueue_append(
+            stream_id="spans",
+            record_type=event_name,
+            payload=span.model_dump(mode="json"),
+            tenant_id=span.tenant_id,
+        )
 
 
 @contextlib.contextmanager

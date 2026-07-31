@@ -17,10 +17,12 @@ plain settable module-level default instead.
 
 from __future__ import annotations
 
+import threading
 from datetime import datetime, timezone
-from functools import lru_cache
 from pathlib import Path
 
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 DEFAULT_DB_PATH = ".wisetraceloom/wisetraceloom.db"
@@ -69,13 +71,60 @@ def _resolve_db_path() -> str:
     return get_db_path()
 
 
-@lru_cache(maxsize=None)
-def _get_engine(db_path: str):
-    path = Path(db_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(f"sqlite:///{path}")
-    SQLModel.metadata.create_all(engine)
-    return engine
+_engine_cache: dict[str, "Engine"] = {}
+_engine_cache_lock = threading.Lock()
+
+
+def _get_engine(db_path: str) -> "Engine":
+    # A plain lru_cache doesn't serialize concurrent *misses* of the same
+    # key — its lock only guards the cache dict, not the wrapped call — so
+    # concurrent first-callers could each race to create_all() the same
+    # SQLite file. Storage.py's concurrent OCC writers make that a real,
+    # not just theoretical, race, so caching is done under an explicit lock.
+    with _engine_cache_lock:
+        engine = _engine_cache.get(db_path)
+        if engine is None:
+            path = Path(db_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            # WAL + a busy timeout let concurrent writers resolve lock
+            # contention by waiting instead of immediately raising
+            # `OperationalError: database is locked` — needed so storage.py's
+            # OCC retry loop actually holds under real concurrent writers.
+            # SQLite itself still serializes actual writes behind the file
+            # lock (WAL only helps readers-vs-writer), so a generous
+            # SQLAlchemy pool just needs enough slots for concurrent callers
+            # to sit and wait on that lock rather than fail with a pool
+            # timeout before they ever reach it.
+            engine = create_engine(
+                f"sqlite:///{path}",
+                connect_args={"timeout": 30},
+                pool_size=20,
+                max_overflow=20,
+            )
+
+            @event.listens_for(engine, "connect")
+            def _set_sqlite_pragmas(dbapi_connection, connection_record) -> None:
+                # `journal_mode` is persisted in the SQLite file itself once
+                # set, but `synchronous` is a per-connection setting that
+                # resets to SQLite's compile-time default on every new
+                # connection — both are set here (an event listener, not a
+                # one-off call) so every connection the pool opens gets both.
+                # `synchronous=NORMAL` skips the fsync-per-commit that
+                # `FULL` (SQLite's default) does in WAL mode — durable across
+                # an application crash, not an OS crash/power loss. That
+                # trade-off matches this SDK's existing fail-open philosophy
+                # (instrumentation failures are already tolerated, never
+                # blocking the host) and was required to keep per-span writes
+                # under the Stage 1 exit gate's <5% latency budget (feature
+                # 1.9) — `FULL`'s fsync-per-commit alone blew the budget.
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.close()
+
+            SQLModel.metadata.create_all(engine)
+            _engine_cache[db_path] = engine
+        return engine
 
 
 def _engine():
