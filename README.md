@@ -6,9 +6,7 @@ Wisetraceloom captures a rich internal schema for agent/tool/LLM calls
 (loop iterations, eval scores, cost/token attribution) and exports it as
 OpenTelemetry `gen_ai.*` spans/metrics for interoperability with the wider
 observability ecosystem (Jaeger, Tempo, Grafana, Datadog, ...) — without
-locking you into it. See [docs/prd.md](docs/prd.md) for the full design
-rationale and [docs/development_status.md](docs/development_status.md) for
-what's built.
+locking you into it.
 
 **No environment variables.** Every knob in this SDK — the database file,
 export opt-in, redaction settings, log rotation — is set through a Python
@@ -259,7 +257,4 @@ uv sync --group dev              # + `--extra presidio` for the NER redaction te
 uv run python -m pytest tests/
 ```
 
-See [docs/development_status.md](docs/development_status.md) for
-feature-by-feature status against [docs/prd.md](docs/prd.md), and
-[CLAUDE.md](CLAUDE.md) for the code-review-graph MCP tooling used in this
-repo.
+
