@@ -6,15 +6,15 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 
-import trailwise.config as config
-from trailwise.otel_export import (
+import wisetraceloom.config as config
+from wisetraceloom.otel_export import (
     export_agent_span,
     export_llm_span,
     export_tool_span,
     gen_ai_semconv_enabled,
     set_export_config,
 )
-from trailwise.schema import AgentSpan, LLMSpan, ToolSpan
+from wisetraceloom.schema import AgentSpan, LLMSpan, ToolSpan
 
 
 @pytest.fixture(autouse=True)
@@ -82,9 +82,9 @@ def test_export_agent_span_carries_gen_ai_agent_attributes(tracer_provider, span
     assert exported.attributes["gen_ai.agent.id"] == "router-1"
     assert exported.attributes["gen_ai.agent.name"] == "router_agent"
     assert exported.attributes["gen_ai.operation.name"] == "invoke_agent"
-    assert exported.attributes["trailwise.loop_iteration"] == 2
-    assert exported.attributes["trailwise.trace_id"] == "t1"
-    assert exported.attributes["trailwise.tenant_id"] == "acme"
+    assert exported.attributes["wisetraceloom.loop_iteration"] == 2
+    assert exported.attributes["wisetraceloom.trace_id"] == "t1"
+    assert exported.attributes["wisetraceloom.tenant_id"] == "acme"
 
 
 def test_export_tool_span_sets_error_status_on_failure(tracer_provider, span_exporter):
@@ -122,8 +122,8 @@ def test_export_llm_span_carries_usage_attributes_and_records_metrics(tracer_pro
     assert exported.attributes["gen_ai.usage.input_tokens"] == 100
     assert exported.attributes["gen_ai.usage.output_tokens"] == 50
     assert exported.attributes["gen_ai.usage.cache_read.input_tokens"] == 10
-    assert exported.attributes["trailwise.estimated_cost_usd"] == 0.0042
-    assert exported.attributes["trailwise.prompt_version_id"] == "router_agent.system_prompt-v1"
+    assert exported.attributes["wisetraceloom.estimated_cost_usd"] == 0.0042
+    assert exported.attributes["wisetraceloom.prompt_version_id"] == "router_agent.system_prompt-v1"
 
     metrics_data = metric_reader.get_metrics_data()
     metric_names = {

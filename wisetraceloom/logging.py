@@ -14,9 +14,9 @@ from typing import Any, Iterator
 
 import structlog
 
-from trailwise.config import get_rotation_config
-from trailwise.redaction import pii_redaction_processor
-from trailwise.rotation import build_rotating_handler
+from wisetraceloom.config import get_rotation_config
+from wisetraceloom.redaction import pii_redaction_processor
+from wisetraceloom.rotation import build_rotating_handler
 
 _configured = False
 _active_file_handler: _stdlib_logging.Handler | None = None
@@ -35,7 +35,7 @@ def configure(
     (falling back to the global default row), else stdout. When a file
     destination is resolved, events are routed through a stdlib `logging`
     root logger carrying a rotating file handler built from that same
-    `RotationConfig` — see `trailwise.config` and `trailwise.rotation`.
+    `RotationConfig` — see `wisetraceloom.config` and `wisetraceloom.rotation`.
     """
     global _configured, _active_file_handler
 

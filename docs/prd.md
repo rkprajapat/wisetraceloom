@@ -67,8 +67,8 @@ flowchart TB
         LLM["LLM Calls"]
     end
 
-    subgraph SDKCore["Trailwise SDK Core (Python)"]
-        Decorators["Decorators / Context Managers<br/>@trace, @observe, with trailwise.span()"]
+    subgraph SDKCore["Wisetraceloom SDK Core (Python)"]
+        Decorators["Decorators / Context Managers<br/>@trace, @observe, with wisetraceloom.span()"]
         AutoInstr["Auto-Instrumentation Hooks<br/>OpenAI, Anthropic, LangChain, MCP"]
         ContextProp["Context Propagation<br/>contextvars + W3C Trace Context<br/>correlation_id, trace_id, span_id"]
         FailSafe["Fail-Open Wrapper<br/>try/except boundary, circuit breaker"]
@@ -110,8 +110,8 @@ flowchart TB
         TailSampler["Collector Tail-Sampling<br/>error/latency-based rules"]
     end
 
-    subgraph ViewerLayer["Trailwise Viewer"]
-        ViewerServer["Embedded Web Server<br/>trailwise ui / trailwise serve"]
+    subgraph ViewerLayer["Wisetraceloom Viewer"]
+        ViewerServer["Embedded Web Server<br/>wisetraceloom ui / wisetraceloom serve"]
         QueryEngine["Search & Query Engine<br/>filter by trace, tenant, version, cost"]
         LiveTail["Real-time Tail<br/>WebSocket/SSE streaming"]
         ScoreCard["Prompt Version Scorecard<br/>A/B comparison view"]

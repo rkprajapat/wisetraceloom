@@ -1,8 +1,8 @@
-# Trailwise
+# Wisetraceloom
 
 Enterprise-scale logging & observability SDK for agentic AI (Python).
 
-Trailwise captures a rich internal schema for agent/tool/LLM calls
+Wisetraceloom captures a rich internal schema for agent/tool/LLM calls
 (loop iterations, eval scores, cost/token attribution) and exports it as
 OpenTelemetry `gen_ai.*` spans/metrics for interoperability with the wider
 observability ecosystem (Jaeger, Tempo, Grafana, Datadog, ...) — without
@@ -19,9 +19,9 @@ survives restarts and can be inspected/audited like any other data.
 ## Install
 
 ```bash
-uv add trailwise
+uv add wisetraceloom
 # or, for the optional Presidio NER redaction layer:
-uv add "trailwise[presidio]"
+uv add "wisetraceloom[presidio]"
 ```
 
 Requires Python ≥ 3.14.
@@ -29,16 +29,16 @@ Requires Python ≥ 3.14.
 ## Quickstart
 
 ```python
-import trailwise
+import wisetraceloom
 
-trailwise.configure()  # console output by default; see "Logging" below
+wisetraceloom.configure()  # console output by default; see "Logging" below
 
-with trailwise.agent_step(agent_id="router-1", agent_name="router_agent") as agent:
-    with trailwise.tool_call("web_search") as tool:
+with wisetraceloom.agent_step(agent_id="router-1", agent_name="router_agent") as agent:
+    with wisetraceloom.tool_call("web_search") as tool:
         results = search("weather in Bengaluru")
         tool.description = "Search the web"
 
-    with trailwise.llm_call("anthropic", "claude-sonnet-5") as llm:
+    with wisetraceloom.llm_call("anthropic", "claude-sonnet-5") as llm:
         response = call_llm(results)
         llm.input_tokens = response.usage.input_tokens
         llm.output_tokens = response.usage.output_tokens
@@ -59,7 +59,7 @@ Prefer decorating a whole function instead of a `with` block? Use the
 decorator form:
 
 ```python
-@trailwise.trace_tool_call("web_search")
+@wisetraceloom.trace_tool_call("web_search")
 def search(query: str) -> list[str]:
     ...
 ```
@@ -69,16 +69,16 @@ def search(query: str) -> list[str]:
 ## Logging
 
 ```python
-trailwise.configure(
+wisetraceloom.configure(
     json_output=True,       # False -> human-readable console output
     file_path=None,         # None -> stdout; or a path to write JSON lines to a file
     tenant_id=None,          # which tenant's rotation/export/redaction config to resolve
 )
 
-logger = trailwise.get_logger("my.module")
+logger = wisetraceloom.get_logger("my.module")
 logger.info("something happened", extra_field="value")
 
-with trailwise.bind_context(tenant_id="acme", request_id="abc123"):
+with wisetraceloom.bind_context(tenant_id="acme", request_id="abc123"):
     logger.info("scoped to this request")  # both fields attached automatically
 ```
 
@@ -90,10 +90,10 @@ tasks — one task's bound context never leaks into another's.
 Persisted in SQLite (see "Where configuration lives" below):
 
 ```python
-from trailwise.config import set_rotation_config
+from wisetraceloom.config import set_rotation_config
 
 set_rotation_config(
-    log_file_path="logs/trailwise.log",
+    log_file_path="logs/wisetraceloom.log",
     max_size_mb=50.0,          # rotate at 50MB ...
     rotation_interval="midnight",  # ... or at midnight, whichever fires first
     backup_count=7,
@@ -111,7 +111,7 @@ Two tiers are **on by default**, no configuration needed:
 
 1. **Structured field-name redaction** — any log field whose *key* matches
    a known-sensitive name (`password`, `api_key`, `ssn`, `email`, `phone`,
-   `credit_card`, ... — see `trailwise.redaction.SENSITIVE_FIELD_NAMES`) is
+   `credit_card`, ... — see `wisetraceloom.redaction.SENSITIVE_FIELD_NAMES`) is
    replaced with `[REDACTED]`, regardless of type.
 2. **Regex scrubbing** — emails, phone numbers, and card-like digit runs
    inside any string field (including the log message itself) are masked.
@@ -120,11 +120,11 @@ A third, optional tier layers free-text NER redaction on top via
 [Presidio](https://microsoft.github.io/presidio/):
 
 ```bash
-uv add "trailwise[presidio]"
+uv add "wisetraceloom[presidio]"
 ```
 
 ```python
-from trailwise.redaction import presidio_available, redact_with_presidio
+from wisetraceloom.redaction import presidio_available, redact_with_presidio
 
 if presidio_available():
     redact_with_presidio("My name is John Smith")  # -> "My name is <PERSON>"
@@ -137,7 +137,7 @@ dependency.
 Which spaCy model backs Presidio is configurable per tenant:
 
 ```python
-from trailwise.redaction import set_redaction_config
+from wisetraceloom.redaction import set_redaction_config
 
 set_redaction_config(presidio_spacy_model="en_core_web_lg")  # default: en_core_web_sm
 ```
@@ -151,7 +151,7 @@ defense-in-depth, not a substitute for tiers 1–2.
 export is opt-in, off by default:
 
 ```python
-from trailwise.otel_export import set_export_config
+from wisetraceloom.otel_export import set_export_config
 
 set_export_config(gen_ai_semconv_enabled=True)              # global default
 set_export_config(tenant_id="acme", gen_ai_semconv_enabled=True)  # per tenant
@@ -170,7 +170,7 @@ template + model params always resolves to the same version, no manual
 bumping:
 
 ```python
-from trailwise.prompts import register_prompt_version
+from wisetraceloom.prompts import register_prompt_version
 
 version = register_prompt_version(
     "router_agent.system_prompt",
@@ -179,7 +179,7 @@ version = register_prompt_version(
 )
 print(version.title)  # "router_agent.system_prompt — v1 — 2026-07-30T18:00Z"
 
-with trailwise.llm_call("anthropic", "claude-sonnet-5", prompt_version_id=version.title) as llm:
+with wisetraceloom.llm_call("anthropic", "claude-sonnet-5", prompt_version_id=version.title) as llm:
     ...
 ```
 
@@ -190,15 +190,15 @@ new, incremented version automatically.
 
 ## Trace propagation across process boundaries
 
-Trailwise uses a single propagation format throughout: [W3C Trace
+Wisetraceloom uses a single propagation format throughout: [W3C Trace
 Context](https://www.w3.org/TR/trace-context/) (`traceparent`/
 `tracestate`). To carry a trace across an outbound HTTP call to another
 agent/service:
 
 ```python
 import httpx
-import trailwise
-from trailwise.tracecontext import inject_traceparent, extract_traceparent
+import wisetraceloom
+from wisetraceloom.tracecontext import inject_traceparent, extract_traceparent
 
 # Outbound: propagate the current trace context
 headers = inject_traceparent({"content-type": "application/json"})
@@ -208,7 +208,7 @@ httpx.post("https://other-service/agent", headers=headers, json=payload)
 incoming = extract_traceparent(request.headers)
 if incoming:
     trace_id, span_id, sampled = incoming
-    with trailwise.tracecontext.bound_trace_context(trace_id, span_id):
+    with wisetraceloom.tracecontext.bound_trace_context(trace_id, span_id):
         ...  # spans created in here are parented to the incoming trace
 ```
 
@@ -219,10 +219,10 @@ inspectable, queryable, and persisted like any other data:
 
 | Domain | Table | Set with |
 |---|---|---|
-| Log rotation | `RotationConfig` | `trailwise.config.set_rotation_config(...)` |
-| OTel export opt-in | `ExportConfig` | `trailwise.otel_export.set_export_config(...)` |
-| Presidio model | `RedactionConfig` | `trailwise.redaction.set_redaction_config(...)` |
-| Prompt versions | `PromptVersion` | `trailwise.prompts.register_prompt_version(...)` |
+| Log rotation | `RotationConfig` | `wisetraceloom.config.set_rotation_config(...)` |
+| OTel export opt-in | `ExportConfig` | `wisetraceloom.otel_export.set_export_config(...)` |
+| Presidio model | `RedactionConfig` | `wisetraceloom.redaction.set_redaction_config(...)` |
+| Prompt versions | `PromptVersion` | `wisetraceloom.prompts.register_prompt_version(...)` |
 
 All of the above (except prompt versions) support a `tenant_id` — pass one
 to scope the setting to a tenant; omit it to set the global default that
@@ -232,20 +232,20 @@ The one exception is the database file's own path, since it can't be
 stored inside the database it names:
 
 ```python
-trailwise.set_db_path("/var/lib/myapp/trailwise.db")  # call before first use
+wisetraceloom.set_db_path("/var/lib/myapp/wisetraceloom.db")  # call before first use
 ```
 
-Defaults to `.trailwise/trailwise.db` (relative to the working directory)
+Defaults to `.wisetraceloom/wisetraceloom.db` (relative to the working directory)
 if never called.
 
 ## Fail-open guarantee
 
-Trailwise's own instrumentation (span construction, logging, export) never
+Wisetraceloom's own instrumentation (span construction, logging, export) never
 crashes your host application — any exception it raises internally is
-caught, logged as a `trailwise_instrumentation_error` warning event, and
-swallowed. This is *only* about trailwise's own code: an exception your
-own code raises inside a `with trailwise.tool_call(...):` block still
-propagates normally — trailwise never swallows your bugs, only its own
+caught, logged as a `wisetraceloom_instrumentation_error` warning event, and
+swallowed. This is *only* about wisetraceloom's own code: an exception your
+own code raises inside a `with wisetraceloom.tool_call(...):` block still
+propagates normally — wisetraceloom never swallows your bugs, only its own
 instrumentation failures.
 
 This is deliberately the opposite policy from PII redaction, which is

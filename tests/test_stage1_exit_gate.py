@@ -11,10 +11,10 @@ import time
 
 import pytest
 
-import trailwise.config as config
-import trailwise.instrumentation as instrumentation
-from trailwise.instrumentation import agent_step, llm_call, tool_call
-from trailwise.logging import configure
+import wisetraceloom.config as config
+import wisetraceloom.instrumentation as instrumentation
+from wisetraceloom.instrumentation import agent_step, llm_call, tool_call
+from wisetraceloom.logging import configure
 
 LATENCY_OVERHEAD_THRESHOLD = 0.05  # PRD Stage 1 exit gate: <5%
 BASELINE_CALL_SECONDS = 0.05  # a fast simulated LLM/tool call
@@ -112,7 +112,7 @@ def test_chaos_broken_logger_and_exporter_simultaneously_never_propagates(monkey
 
 
 def test_host_business_logic_exceptions_still_propagate_through_instrumentation():
-    # Fail-open protects trailwise's own instrumentation, never the host's
+    # Fail-open protects wisetraceloom's own instrumentation, never the host's
     # business logic — this must keep working even under the chaos above.
     with pytest.raises(ValueError, match="real bug"):
         with tool_call("search"):

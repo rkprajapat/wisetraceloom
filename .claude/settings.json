@@ -9,7 +9,12 @@
       "Bash(./.venv/Scripts/python.exe -m pip index versions presidio-analyzer)",
       "Bash(./.venv/Scripts/python.exe -c \"import presidio_analyzer, presidio_anonymizer; print\\('ok'\\)\")",
       "Bash(./.venv/Scripts/python.exe -m spacy download en_core_web_sm)",
-      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_redaction.py -q)"
+      "Bash(./.venv/Scripts/python.exe -m pytest tests/test_redaction.py -q)",
+      "Bash(git mv *)",
+      "Bash(git checkout *)",
+      "Bash(uv lock *)",
+      "Bash(rm -f dist/wisetraceloom-0.1.0-py3-none-any.whl dist/wisetraceloom-0.1.0.tar.gz)",
+      "Bash(rm -rf .wisetraceloom)"
     ]
   },
   "hooks": {

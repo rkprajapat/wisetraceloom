@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-import trailwise.config as config
-from trailwise.config import set_rotation_config
-from trailwise.logging import bind_context, configure, get_logger
+import wisetraceloom.config as config
+from wisetraceloom.config import set_rotation_config
+from wisetraceloom.logging import bind_context, configure, get_logger
 
 
 @pytest.fixture(autouse=True)

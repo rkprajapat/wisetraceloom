@@ -1,5 +1,5 @@
-from trailwise.config import set_db_path
-from trailwise.instrumentation import (
+from wisetraceloom.config import set_db_path
+from wisetraceloom.instrumentation import (
     agent_step,
     llm_call,
     tool_call,
@@ -7,11 +7,11 @@ from trailwise.instrumentation import (
     trace_llm_call,
     trace_tool_call,
 )
-from trailwise.logging import bind_context, configure, get_logger
-from trailwise.otel_export import set_export_config
-from trailwise.prompts import fingerprint_prompt, register_prompt_version
-from trailwise.redaction import presidio_available, set_redaction_config
-from trailwise.tracecontext import extract_traceparent, inject_traceparent
+from wisetraceloom.logging import bind_context, configure, get_logger
+from wisetraceloom.otel_export import set_export_config
+from wisetraceloom.prompts import fingerprint_prompt, register_prompt_version
+from wisetraceloom.redaction import presidio_available, set_redaction_config
+from wisetraceloom.tracecontext import extract_traceparent, inject_traceparent
 
 __all__ = [
     "agent_step",

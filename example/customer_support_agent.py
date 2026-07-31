@@ -1,4 +1,4 @@
-"""A more realistic trailwise scenario: a support-ticket triage agent that
+"""A more realistic wisetraceloom scenario: a support-ticket triage agent that
 processes a small batch of tickets, each going through customer lookup ->
 intent classification -> refund processing.
 
@@ -9,15 +9,15 @@ toy demo:
   -- a structured field named `email`/`phone` (tier 1), *and* an email
   address embedded inside free-text `message` field (tier 2 regex) -- with
   no extra code at the call site.
-- one ticket's tool call fails (a real `ValueError`, not a trailwise
+- one ticket's tool call fails (a real `ValueError`, not a wisetraceloom
   failure) -- the exception still propagates to caller code as normal;
-  trailwise's fail-open guarantee only covers its own instrumentation, not
+  wisetraceloom's fail-open guarantee only covers its own instrumentation, not
   your business logic. The batch loop below catches it and keeps going, the
   way a real ticket-processing job would.
 - multi-tenant: each ticket is bound to its own `tenant_id`, so every span
   and log line in its trace carries that tenant automatically.
 
-Run from the repo root (as a module, so `trailwise/` resolves off the repo
+Run from the repo root (as a module, so `wisetraceloom/` resolves off the repo
 root rather than the script's own directory):
 
     uv run python -m example.customer_support_agent
@@ -28,10 +28,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import trailwise
-from trailwise.config import set_rotation_config
-from trailwise.otel_export import set_export_config
-from trailwise.prompts import register_prompt_version
+import wisetraceloom
+from wisetraceloom.config import set_rotation_config
+from wisetraceloom.otel_export import set_export_config
+from wisetraceloom.prompts import register_prompt_version
 
 
 # --- fake external calls, so the example needs no network/API key --------
@@ -87,7 +87,7 @@ def process_refund(customer: CustomerRecord, ticket: Ticket) -> str:
     return f"refund-{ticket.ticket_id}"
 
 
-@trailwise.trace_tool_call("send_confirmation_email")
+@wisetraceloom.trace_tool_call("send_confirmation_email")
 def send_confirmation(customer: CustomerRecord, confirmation_id: str) -> None:
     logger.info("confirmation_sent", to=customer.email, confirmation_id=confirmation_id)
 
@@ -100,11 +100,11 @@ def send_confirmation(customer: CustomerRecord, confirmation_id: str) -> None:
 # Create the directory unconditionally so that's never a surprise.
 Path("logs").mkdir(exist_ok=True)
 
-trailwise.configure(json_output=False)
-logger = trailwise.get_logger("example.customer_support_agent")
+wisetraceloom.configure(json_output=False)
+logger = wisetraceloom.get_logger("example.customer_support_agent")
 
 set_rotation_config(
-    log_file_path="logs/trailwise.log",
+    log_file_path="logs/wisetraceloom.log",
     max_size_mb=50.0,
     rotation_interval="midnight",
     backup_count=7,
@@ -124,18 +124,18 @@ prompt_version = register_prompt_version(
 
 
 def handle_ticket(ticket: Ticket) -> None:
-    with trailwise.bind_context(tenant_id=ticket.tenant_id, request_id=ticket.ticket_id):
-        with trailwise.agent_step(agent_id="support-agent", agent_name="support_triage_agent") as agent:
+    with wisetraceloom.bind_context(tenant_id=ticket.tenant_id, request_id=ticket.ticket_id):
+        with wisetraceloom.agent_step(agent_id="support-agent", agent_name="support_triage_agent") as agent:
             agent.description = f"Triage ticket {ticket.ticket_id}"
 
-            with trailwise.tool_call("lookup_customer") as tool:
+            with wisetraceloom.tool_call("lookup_customer") as tool:
                 customer = lookup_customer(ticket.customer_id)
                 tool.description = "Look up customer record"
                 # `email`/`phone` are struck to [REDACTED] by field name (tier 1);
                 # nothing extra needed here.
                 logger.info("customer_found", name=customer.name, email=customer.email, phone=customer.phone)
 
-            with trailwise.llm_call(
+            with wisetraceloom.llm_call(
                 "anthropic", "claude-sonnet-5", prompt_version_id=prompt_version.title
             ) as llm:
                 classification = classify_intent(ticket.message)
@@ -149,7 +149,7 @@ def handle_ticket(ticket: Ticket) -> None:
             logger.info("intent_classified", intent=classification.intent, message=ticket.message)
 
             if classification.intent == "refund_request":
-                with trailwise.tool_call("process_refund") as tool:
+                with wisetraceloom.tool_call("process_refund") as tool:
                     tool.description = "Process refund"
                     confirmation_id = process_refund(customer, ticket)
                 send_confirmation(customer, confirmation_id)
@@ -171,7 +171,7 @@ def main() -> None:
         try:
             handle_ticket(ticket)
         except ValueError as exc:
-            # trailwise never swallows *your* exceptions -- process_refund's
+            # wisetraceloom never swallows *your* exceptions -- process_refund's
             # ValueError above propagates normally through the `tool_call`
             # block; the tool_span is still emitted (success=False,
             # error_message set) before it does. Handle it the way any

@@ -1,4 +1,4 @@
-from trailwise.schema import SCHEMA_VERSION, AgentSpan, EvalScore, LLMSpan, ToolSpan
+from wisetraceloom.schema import SCHEMA_VERSION, AgentSpan, EvalScore, LLMSpan, ToolSpan
 
 
 def test_agent_span_covers_loop_iteration_and_stamps_version():

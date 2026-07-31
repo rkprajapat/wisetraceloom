@@ -1,6 +1,6 @@
 """One-line instrumentation for the three common call sites (PRD §5 —
 feature 1.7): an agent step, a tool call, an LLM call. Each is a context
-manager yielding the matching `trailwise.schema` span so the caller can
+manager yielding the matching `wisetraceloom.schema` span so the caller can
 fill in fields as they become known (e.g. an `LLMSpan`'s token counts,
 read off the provider's response, inside the `with` block); a decorator
 wrapping the same context manager around an entire function is also
@@ -8,7 +8,7 @@ provided for the common case where one function *is* one step.
 
 Every context manager:
 
-1. Resolves `trace_id`/`parent_span_id` from `trailwise.tracecontext`'s
+1. Resolves `trace_id`/`parent_span_id` from `wisetraceloom.tracecontext`'s
    current context (starting a new trace if none is active) and generates
    a new `span_id`, then binds `(trace_id, span_id)` as current for the
    duration of the block — so a `tool_call` or `llm_call` nested inside an
@@ -16,9 +16,9 @@ Every context manager:
 2. Stamps `ended_at` and emits the span (structured log event + OTel
    export) on exit, success or failure.
 3. Never swallows the caller's own exceptions — only the emit step
-   (logging + export) is wrapped in `trailwise.failsafe.fail_open_context`,
+   (logging + export) is wrapped in `wisetraceloom.failsafe.fail_open_context`,
    per feature 1.5's boundary: instrumentation failures are fail-open, the
-   host's business logic is not trailwise's to swallow.
+   host's business logic is not wisetraceloom's to swallow.
 """
 
 from __future__ import annotations
@@ -29,11 +29,11 @@ import inspect
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterator, TypeVar
 
-from trailwise.failsafe import fail_open_context
-from trailwise.logging import get_logger
-from trailwise.otel_export import export_agent_span, export_llm_span, export_tool_span
-from trailwise.schema import AgentSpan, LLMSpan, ToolSpan
-from trailwise.tracecontext import (
+from wisetraceloom.failsafe import fail_open_context
+from wisetraceloom.logging import get_logger
+from wisetraceloom.otel_export import export_agent_span, export_llm_span, export_tool_span
+from wisetraceloom.schema import AgentSpan, LLMSpan, ToolSpan
+from wisetraceloom.tracecontext import (
     bound_trace_context,
     current_span_id,
     current_trace_id,
@@ -52,7 +52,7 @@ _SPAN_EVENT_NAMES = {
 
 def _emit_span(span: AgentSpan | ToolSpan | LLMSpan, exporter: Callable[..., None]) -> None:
     with fail_open_context(f"emit_span:{type(span).__name__}"):
-        get_logger("trailwise.spans").info(_SPAN_EVENT_NAMES[type(span)], **span.model_dump(mode="json"))
+        get_logger("wisetraceloom.spans").info(_SPAN_EVENT_NAMES[type(span)], **span.model_dump(mode="json"))
         exporter(span)
 
 

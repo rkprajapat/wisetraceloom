@@ -1,11 +1,11 @@
 import pytest
 import structlog
 
-import trailwise.config as config
-from trailwise.instrumentation import agent_step, llm_call, tool_call, trace_tool_call
-from trailwise.logging import configure
-from trailwise.otel_export import set_export_config
-from trailwise.tracecontext import current_span_id, current_trace_id
+import wisetraceloom.config as config
+from wisetraceloom.instrumentation import agent_step, llm_call, tool_call, trace_tool_call
+from wisetraceloom.logging import configure
+from wisetraceloom.otel_export import set_export_config
+from wisetraceloom.tracecontext import current_span_id, current_trace_id
 
 _CAPTURE_PROCESSORS = (structlog.contextvars.merge_contextvars,)
 
@@ -83,7 +83,7 @@ def test_span_exported_to_otel_when_opted_in(tmp_path):
     from opentelemetry.sdk.trace.export import SimpleSpanProcessor
     from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 
-    import trailwise.instrumentation as instrumentation
+    import wisetraceloom.instrumentation as instrumentation
 
     set_export_config(gen_ai_semconv_enabled=True)
     exporter = InMemorySpanExporter()
@@ -115,7 +115,7 @@ def test_decorator_sugar_wraps_whole_function_as_one_step():
 
 
 def test_emit_failure_does_not_propagate_to_caller(monkeypatch):
-    import trailwise.instrumentation as instrumentation
+    import wisetraceloom.instrumentation as instrumentation
 
     def broken_export(span):
         raise RuntimeError("exporter down")

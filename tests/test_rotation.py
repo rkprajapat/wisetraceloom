@@ -3,8 +3,8 @@ import time
 from logging import FileHandler
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 
-from trailwise.config import RotationConfig
-from trailwise.rotation import SizeAndTimeRotatingFileHandler, build_rotating_handler
+from wisetraceloom.config import RotationConfig
+from wisetraceloom.rotation import SizeAndTimeRotatingFileHandler, build_rotating_handler
 
 
 def _logger_with_handler(handler: logging.Handler) -> logging.Logger:

@@ -10,7 +10,7 @@
    + a spaCy model) installed; `presidio_available()` reports whether it
    is, so callers can compose it into their own pipeline without a hard
    dependency on it being present. Which spaCy model to load is a per-tenant
-   `RedactionConfig` row (SQLModel, same store as `trailwise.config`), not
+   `RedactionConfig` row (SQLModel, same store as `wisetraceloom.config`), not
    an environment variable — set it via `set_redaction_config(...)`.
 
 Presidio explicitly does not guarantee finding all PII (PRD §3) — this is
@@ -26,7 +26,7 @@ from typing import Any
 
 from sqlmodel import Field, Session, SQLModel, select
 
-from trailwise.config import get_engine
+from wisetraceloom.config import get_engine
 
 SENSITIVE_FIELD_NAMES = frozenset(
     {

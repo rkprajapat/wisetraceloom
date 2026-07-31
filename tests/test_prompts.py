@@ -1,7 +1,7 @@
 import pytest
 
-import trailwise.config as config
-from trailwise.prompts import fingerprint_prompt, register_prompt_version
+import wisetraceloom.config as config
+from wisetraceloom.prompts import fingerprint_prompt, register_prompt_version
 
 
 @pytest.fixture(autouse=True)

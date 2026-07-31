@@ -1,7 +1,7 @@
 """Fail-open wrapper around SDK instrumentation (PRD §5, §7).
 
 The logging/instrumentation SDK must never crash the host application:
-anything raised *by trailwise's own instrumentation code* (span
+anything raised *by wisetraceloom's own instrumentation code* (span
 construction, export, storage) is caught and logged, never propagated.
 This is the opposite policy from PII masking (feature 1.4), which is
 fail-**closed** by design — the two are deliberately asymmetric: a failure
@@ -15,8 +15,8 @@ unresponsive to shutdown/interrupt.
 
 This wrapper protects instrumentation internals; it must never be placed
 around the host's own business logic (the code inside a `with
-trailwise.tool_call(...):` block, say) — that code's exceptions are the
-host's to handle, not trailwise's to swallow.
+wisetraceloom.tool_call(...):` block, say) — that code's exceptions are the
+host's to handle, not wisetraceloom's to swallow.
 """
 
 from __future__ import annotations
@@ -35,10 +35,10 @@ def _log_swallowed_exception(operation: str, exc: Exception) -> None:
     # telemetry — but that telemetry call is itself sandboxed, since a
     # broken logging pipeline must not turn "fail open" into "fail crash".
     try:
-        from trailwise.logging import get_logger
+        from wisetraceloom.logging import get_logger
 
-        get_logger("trailwise.failsafe").warning(
-            "trailwise_instrumentation_error",
+        get_logger("wisetraceloom.failsafe").warning(
+            "wisetraceloom_instrumentation_error",
             operation=operation,
             exc_type=type(exc).__name__,
             exc_message=str(exc),
@@ -85,7 +85,7 @@ def fail_open(operation: str | None = None) -> Callable[[F], F]:
 def fail_open_context(operation: str) -> Iterator[None]:
     """Context-manager form of `fail_open`, for wrapping a block of
     instrumentation code (span construction + export) rather than a whole
-    function — e.g. inside `trailwise.instrumentation`'s span context
+    function — e.g. inside `wisetraceloom.instrumentation`'s span context
     managers, around the setup/teardown code, never around the host's own
     business logic in the `with` block.
     """

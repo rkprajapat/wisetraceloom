@@ -3,7 +3,7 @@ import asyncio
 import pytest
 import structlog
 
-from trailwise.logging import bind_context, configure, get_logger
+from wisetraceloom.logging import bind_context, configure, get_logger
 
 # capture_logs() replaces the configured processor chain wholesale, so the
 # contextvars-merging processor must be re-supplied for captured entries to

@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from trailwise.tracecontext import (
+from wisetraceloom.tracecontext import (
     bound_trace_context,
     current_span_id,
     current_trace_id,

@@ -4,12 +4,12 @@ A single propagation format is used throughout: `traceparent`/`tracestate`
 per the W3C Trace Context spec (`{version}-{trace-id}-{parent-id}-{trace-flags}`,
 e.g. `00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01`). In-process,
 the "current" trace/span id is carried via `contextvars` — the same
-technique `trailwise.logging.bind_context` uses — so it propagates
+technique `wisetraceloom.logging.bind_context` uses — so it propagates
 correctly across asyncio tasks without leaking between concurrently
 running ones. Across a process boundary, `inject_traceparent`/
 `extract_traceparent` move the same ids through a plain header dict.
 
-`trailwise.schema`'s `trace_id`/`span_id` fields and `trailwise.instrumentation`'s
+`wisetraceloom.schema`'s `trace_id`/`span_id` fields and `wisetraceloom.instrumentation`'s
 context managers both use `generate_trace_id`/`generate_span_id` here, so
 ids are W3C-conformant (32/16 lowercase hex chars) from the moment a span
 is created, not just at process boundaries.
@@ -32,13 +32,13 @@ _TRACEPARENT_RE = re.compile(
 )
 
 _current_trace_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "trailwise_trace_id", default=None
+    "wisetraceloom_trace_id", default=None
 )
 _current_span_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "trailwise_span_id", default=None
+    "wisetraceloom_span_id", default=None
 )
 _current_tracestate: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "trailwise_tracestate", default=None
+    "wisetraceloom_tracestate", default=None
 )
 
 

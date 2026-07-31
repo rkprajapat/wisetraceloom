@@ -6,7 +6,7 @@ layered on top later without a schema migration; today only the global row
 (tenant_id=None) is written by default, and lookups fall back to it when no
 tenant-specific row exists.
 
-Trailwise takes no configuration from environment variables anywhere in the
+Wisetraceloom takes no configuration from environment variables anywhere in the
 SDK — every knob, including where this very store's SQLite file lives, is
 set through a Python call (`set_db_path`, `set_rotation_config`, etc.) so a
 host app's configuration is explicit and traceable to one place in its own
@@ -23,7 +23,7 @@ from pathlib import Path
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-DEFAULT_DB_PATH = ".trailwise/trailwise.db"
+DEFAULT_DB_PATH = ".wisetraceloom/wisetraceloom.db"
 
 _db_path_override: str | None = None
 

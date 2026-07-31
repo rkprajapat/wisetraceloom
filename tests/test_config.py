@@ -1,7 +1,7 @@
 import pytest
 
-import trailwise.config as config
-from trailwise.config import get_rotation_config, set_rotation_config
+import wisetraceloom.config as config
+from wisetraceloom.config import get_rotation_config, set_rotation_config
 
 
 @pytest.fixture(autouse=True)

@@ -1,8 +1,8 @@
 import pytest
 import structlog
 
-from trailwise.failsafe import fail_open, fail_open_context
-from trailwise.logging import configure
+from wisetraceloom.failsafe import fail_open, fail_open_context
+from wisetraceloom.logging import configure
 
 
 @pytest.fixture(autouse=True)
@@ -60,7 +60,7 @@ def test_fail_open_does_not_swallow_keyboard_interrupt():
 
 
 def test_host_business_logic_exception_still_propagates_when_not_wrapped():
-    # fail_open must only ever be applied around trailwise's own
+    # fail_open must only ever be applied around wisetraceloom's own
     # instrumentation code, never around the host's business logic — this
     # test documents that an unwrapped call still raises normally.
     def host_logic():
@@ -81,6 +81,6 @@ def test_fail_open_logs_a_warning_event_when_swallowing():
         boom()
 
     assert len(captured) == 1
-    assert captured[0]["event"] == "trailwise_instrumentation_error"
+    assert captured[0]["event"] == "wisetraceloom_instrumentation_error"
     assert captured[0]["operation"] == "export_llm_span"
     assert captured[0]["exc_type"] == "RuntimeError"

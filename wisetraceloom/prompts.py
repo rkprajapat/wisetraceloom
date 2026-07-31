@@ -20,7 +20,7 @@ from typing import Any
 
 from sqlmodel import Field, Session, SQLModel, select
 
-from trailwise.config import get_engine
+from wisetraceloom.config import get_engine
 
 
 class PromptVersion(SQLModel, table=True):

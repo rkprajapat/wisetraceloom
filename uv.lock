@@ -1709,52 +1709,6 @@ wheels = [
 ]
 
 [[package]]
-name = "trailwise"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "opentelemetry-api" },
-    { name = "opentelemetry-sdk" },
-    { name = "pydantic" },
-    { name = "sqlmodel" },
-    { name = "structlog" },
-]
-
-[package.optional-dependencies]
-presidio = [
-    { name = "en-core-web-sm" },
-    { name = "presidio-analyzer" },
-    { name = "presidio-anonymizer" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "code-review-graph" },
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "en-core-web-sm", marker = "extra == 'presidio'", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
-    { name = "opentelemetry-api", specifier = ">=1.30.0" },
-    { name = "opentelemetry-sdk", specifier = ">=1.30.0" },
-    { name = "presidio-analyzer", marker = "extra == 'presidio'", specifier = ">=2.2.364" },
-    { name = "presidio-anonymizer", marker = "extra == 'presidio'", specifier = ">=2.2.364" },
-    { name = "pydantic", specifier = ">=2.13.4" },
-    { name = "sqlmodel", specifier = ">=0.0.39" },
-    { name = "structlog", specifier = ">=26.1.0" },
-]
-provides-extras = ["presidio"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "code-review-graph", specifier = ">=2.3.7" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-asyncio", specifier = ">=1.4.0" },
-]
-
-[[package]]
 name = "tree-sitter"
 version = "0.26.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2048,6 +2002,52 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/56/23/286f283a0fbf64cb43dc15f53022c36e749dfae5e70ad1e58ea76813a656/websockets-17.0-cp314-cp314t-win_amd64.whl", hash = "sha256:85849eff1a1a39caf82a73c853006e01eb9a080cb03ba9022a8d72839ac3d671", size = 213206, upload-time = "2026-07-29T18:06:59.816Z" },
     { url = "https://files.pythonhosted.org/packages/a9/f0/b48652b29d781850d0f685f680935a7ae2b2a6d9668f6f4ad7876ef0684d/websockets-17.0-cp314-cp314t-win_arm64.whl", hash = "sha256:8122f76dc4418fa7cb1cd015444871469e277ea845761169009ca4167835f6a8", size = 213122, upload-time = "2026-07-29T18:07:01.758Z" },
     { url = "https://files.pythonhosted.org/packages/9d/b4/9b5bd8ad82a7ace4e4a497aed083b6a9bf9076b1ea1a0bf5831686b4af71/websockets-17.0-py3-none-any.whl", hash = "sha256:0c24d62cafaca7dc1631e9f3bf0672fa83f010e66a2aeff4d00727b18addcd8e", size = 206871, upload-time = "2026-07-29T18:07:15.156Z" },
+]
+
+[[package]]
+name = "wisetraceloom"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "pydantic" },
+    { name = "sqlmodel" },
+    { name = "structlog" },
+]
+
+[package.optional-dependencies]
+presidio = [
+    { name = "en-core-web-sm" },
+    { name = "presidio-analyzer" },
+    { name = "presidio-anonymizer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "code-review-graph" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "en-core-web-sm", marker = "extra == 'presidio'", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
+    { name = "opentelemetry-api", specifier = ">=1.30.0" },
+    { name = "opentelemetry-sdk", specifier = ">=1.30.0" },
+    { name = "presidio-analyzer", marker = "extra == 'presidio'", specifier = ">=2.2.364" },
+    { name = "presidio-anonymizer", marker = "extra == 'presidio'", specifier = ">=2.2.364" },
+    { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "sqlmodel", specifier = ">=0.0.39" },
+    { name = "structlog", specifier = ">=26.1.0" },
+]
+provides-extras = ["presidio"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "code-review-graph", specifier = ">=2.3.7" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
 ]
 
 [[package]]

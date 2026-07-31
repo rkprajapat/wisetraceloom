@@ -1,4 +1,4 @@
-"""Log file rotation handlers driven by a `trailwise.config.RotationConfig`.
+"""Log file rotation handlers driven by a `wisetraceloom.config.RotationConfig`.
 
 stdlib only ships separate size-based (`RotatingFileHandler`) and time-based
 (`TimedRotatingFileHandler`) implementations; `SizeAndTimeRotatingFileHandler`
@@ -15,7 +15,7 @@ import shutil
 from logging import FileHandler, LogRecord
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler
 
-from trailwise.config import RotationConfig
+from wisetraceloom.config import RotationConfig
 
 
 class SizeAndTimeRotatingFileHandler(TimedRotatingFileHandler):

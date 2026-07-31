@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-import trailwise.config as config
-from trailwise.logging import configure, get_logger
-from trailwise.redaction import (
+import wisetraceloom.config as config
+from wisetraceloom.logging import configure, get_logger
+from wisetraceloom.redaction import (
     pii_redaction_processor,
     presidio_available,
     redact_regex_matches,
