@@ -1,5 +1,13 @@
 from wisetraceloom.audit_chain import anchor_commits, verify_anchor, verify_chain
 from wisetraceloom.config import set_db_path
+from wisetraceloom.cost import (
+    assert_within_quota,
+    check_spend_anomaly,
+    estimate_cost_usd,
+    get_daily_spend,
+    set_pricing_config,
+    set_quota_config,
+)
 from wisetraceloom.crypto_shred import confirm_erasure, decrypt_for_subject, encrypt_for_subject, request_erasure
 from wisetraceloom.instrumentation import (
     agent_step,
@@ -20,13 +28,17 @@ __all__ = [
     "agent_step",
     "anchor_commits",
     "append_commit",
+    "assert_within_quota",
     "bind_context",
+    "check_spend_anomaly",
     "confirm_erasure",
     "configure",
     "decrypt_for_subject",
     "encrypt_for_subject",
+    "estimate_cost_usd",
     "extract_traceparent",
     "fingerprint_prompt",
+    "get_daily_spend",
     "get_logger",
     "inject_traceparent",
     "llm_call",
@@ -38,6 +50,8 @@ __all__ = [
     "request_erasure",
     "set_db_path",
     "set_export_config",
+    "set_pricing_config",
+    "set_quota_config",
     "set_redaction_config",
     "set_storage_config",
     "tool_call",

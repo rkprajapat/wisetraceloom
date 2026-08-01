@@ -29,6 +29,7 @@ import inspect
 from datetime import datetime, timezone
 from typing import Any, Callable, Iterator, TypeVar
 
+from wisetraceloom.cost import check_spend_anomaly, estimate_cost_usd, record_spend
 from wisetraceloom.failsafe import fail_open_context
 from wisetraceloom.logging import get_logger
 from wisetraceloom.otel_export import export_agent_span, export_llm_span, export_tool_span
@@ -177,7 +178,33 @@ def llm_call(
             yield span
         finally:
             span.ended_at = datetime.now(timezone.utc)
+            _attribute_cost(span)
             _emit_span(span, export_llm_span)
+
+
+def _attribute_cost(span: LLMSpan) -> None:
+    """Auto-fill `span.estimated_cost_usd` from `wisetraceloom.cost`'s
+    pricing config if the host hasn't already set it, then attribute the
+    resulting cost to the span's tenant and check it against that tenant's
+    rolling spend baseline. Cost attribution is instrumentation, not
+    business logic, so — like `_emit_span` — this is wrapped in its own
+    `fail_open_context`, independent of span emission/storage: a pricing
+    lookup failure must never block a span from being logged or exported,
+    and vice versa (feature 1.5's fail-open boundary)."""
+    with fail_open_context("attribute_cost"):
+        if span.estimated_cost_usd is None:
+            span.estimated_cost_usd = estimate_cost_usd(
+                span.provider_name,
+                span.request_model,
+                tenant_id=span.tenant_id,
+                input_tokens=span.input_tokens,
+                output_tokens=span.output_tokens,
+                cache_read_input_tokens=span.cache_read_input_tokens,
+                cache_creation_input_tokens=span.cache_creation_input_tokens,
+            )
+        if span.estimated_cost_usd is not None and span.tenant_id is not None:
+            record_spend(span.tenant_id, span.estimated_cost_usd)
+            check_spend_anomaly(span.tenant_id)
 
 
 def _wrap(context_manager_factory: Callable[..., Any]) -> Callable[..., Callable[[F], F]]:

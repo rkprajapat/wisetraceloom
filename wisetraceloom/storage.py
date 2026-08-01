@@ -48,7 +48,9 @@ from __future__ import annotations
 import hashlib
 import json
 import queue
+import random
 import threading
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -245,17 +247,31 @@ def append_commit(
     payload: dict[str, Any],
     *,
     tenant_id: str | None = None,
-    max_retries: int = 5,
+    max_retries: int = 20,
 ) -> StorageCommit:
     """Append `payload` as the next version in `stream_id`. Retries with a
     freshly computed version number on a version conflict — `IntegrityError`
     is a real OCC conflict (another writer took the version); `OperationalError`
     is SQLite lock contention under concurrent writers, retried the same way.
-    Raises `StorageConflictError` if `max_retries` is exhausted."""
+    Raises `StorageConflictError` if `max_retries` is exhausted.
+
+    `max_retries` defaults higher than feature 2.1's original 5: feature
+    2.3's `_prev_entry_hash` lookup added a second read per attempt, widening
+    the window in which many concurrent writers can all observe the same
+    stale "next version" before any of them commits — under a thundering
+    herd (many writers starting at once, e.g. this module's own concurrency
+    tests), that occasionally needed more than 5 rounds to resolve even
+    though no writer was ever actually lost, just contending. The small
+    jittered backoff below (rather than retrying instantly in a tight loop)
+    is the standard fix for that: it desynchronizes retriers so each round
+    resolves more of them, keeping the *typical* case just as fast as before
+    (no contention -> zero retries, zero sleep) while making the
+    worst-case thundering-herd path actually converge instead of exhausting
+    a small fixed retry budget."""
     engine = get_engine()
     payload_json = json.dumps(payload, sort_keys=True, default=str)
 
-    for _ in range(max_retries):
+    for attempt in range(max_retries):
         with Session(engine) as session:
             version = _next_version(session, stream_id)
             prev_hash = _prev_entry_hash(session, stream_id, version)
@@ -278,6 +294,7 @@ def append_commit(
                 session.commit()
             except (IntegrityError, OperationalError):
                 session.rollback()
+                time.sleep(random.uniform(0, 0.001 * (attempt + 1)))
                 continue
             session.refresh(commit)
             _maybe_checkpoint(stream_id, version)
