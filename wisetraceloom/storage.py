@@ -54,11 +54,13 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlmodel import Field, Session, SQLModel, UniqueConstraint, func, select
 
 from wisetraceloom.config import get_db_path, get_engine
 from wisetraceloom.logging import get_logger
+from wisetraceloom.residency import resolve_engine
 
 
 def iso_utc(dt: datetime) -> str:
@@ -248,6 +250,7 @@ def append_commit(
     *,
     tenant_id: str | None = None,
     max_retries: int = 20,
+    engine: Engine | None = None,
 ) -> StorageCommit:
     """Append `payload` as the next version in `stream_id`. Retries with a
     freshly computed version number on a version conflict — `IntegrityError`
@@ -267,8 +270,22 @@ def append_commit(
     resolves more of them, keeping the *typical* case just as fast as before
     (no contention -> zero retries, zero sleep) while making the
     worst-case thundering-herd path actually converge instead of exhausting
-    a small fixed retry budget."""
-    engine = get_engine()
+    a small fixed retry budget.
+
+    `engine` defaults to resolving from `tenant_id` via
+    `wisetraceloom.residency` (feature 2.5) — a tenant routed to a region
+    writes to that region's own SQLite file instead of the default store.
+    `enqueue_append` passes an already-resolved `engine` explicitly instead
+    of leaving this function to resolve it: resolution reads ambient config
+    (`RegionConfig`, `get_db_path()`), and `enqueue_append`'s whole point is
+    handing the write to a background thread that may not run until well
+    after the enqueuing call returns — resolving lazily on that thread would
+    use whatever config happens to be active *then*, not what was active
+    when the write was actually requested (in tests, this manifested as a
+    background write silently landing in a stale, differently-schema'd
+    database once an earlier test's config override had already been torn
+    down by the time the queue drained)."""
+    engine = engine or resolve_engine(tenant_id)
     payload_json = json.dumps(payload, sort_keys=True, default=str)
 
     for attempt in range(max_retries):
@@ -297,7 +314,7 @@ def append_commit(
                 time.sleep(random.uniform(0, 0.001 * (attempt + 1)))
                 continue
             session.refresh(commit)
-            _maybe_checkpoint(stream_id, version)
+            _maybe_checkpoint(stream_id, version, engine)
             return commit
 
     raise StorageConflictError(
@@ -309,16 +326,16 @@ def append_commit(
 # best-effort, non-blocking handoff (see module docstring). Bounded so a
 # stalled writer degrades by dropping new writes (logged) rather than
 # growing memory without limit — an explicit drop policy per PRD §7.
-_write_queue: "queue.Queue[tuple[str, str, dict[str, Any], str | None]]" = queue.Queue(maxsize=10_000)
+_write_queue: "queue.Queue[tuple[str, str, dict[str, Any], str | None, Engine]]" = queue.Queue(maxsize=10_000)
 _write_worker_thread: threading.Thread | None = None
 _write_worker_lock = threading.Lock()
 
 
 def _write_worker_loop() -> None:
     while True:
-        stream_id, record_type, payload, tenant_id = _write_queue.get()
+        stream_id, record_type, payload, tenant_id, engine = _write_queue.get()
         try:
-            append_commit(stream_id, record_type, payload, tenant_id=tenant_id)
+            append_commit(stream_id, record_type, payload, tenant_id=tenant_id, engine=engine)
         except Exception:
             get_logger("wisetraceloom.storage").warning(
                 "wisetraceloom_async_append_failed", stream_id=stream_id, record_type=record_type
@@ -345,10 +362,17 @@ def enqueue_append(
     """Non-blocking, best-effort append: hands the commit to a background
     writer thread instead of durably writing inline (see module docstring
     for the durability trade-off). If the queue is full, the write is
-    dropped and logged rather than blocking the caller."""
+    dropped and logged rather than blocking the caller.
+
+    The target engine is resolved from `tenant_id` right here, synchronously,
+    rather than left for the background thread to resolve when it eventually
+    dequeues this write — see `append_commit`'s docstring for why resolving
+    late reads whatever config is ambient *then*, not what was ambient when
+    the write was actually requested."""
     _ensure_write_worker()
+    engine = resolve_engine(tenant_id)
     try:
-        _write_queue.put_nowait((stream_id, record_type, payload, tenant_id))
+        _write_queue.put_nowait((stream_id, record_type, payload, tenant_id, engine))
     except queue.Full:
         get_logger("wisetraceloom.storage").warning(
             "wisetraceloom_storage_queue_full", stream_id=stream_id, record_type=record_type
@@ -364,8 +388,8 @@ def wait_for_pending_writes() -> None:
     _write_queue.join()
 
 
-def _load_last_checkpoint_version(stream_id: str) -> int:
-    with Session(get_engine()) as session:
+def _load_last_checkpoint_version(stream_id: str, engine: Engine) -> int:
+    with Session(engine) as session:
         version = session.exec(
             select(func.max(StorageCheckpoint.version)).where(StorageCheckpoint.stream_id == stream_id)
         ).one()
@@ -396,12 +420,12 @@ def wait_for_pending_checkpoints(timeout: float = 5.0) -> None:
         thread.join(timeout=timeout)
 
 
-def _spawn_checkpoint(stream_id: str, cache_key: tuple[str, str], latest_version: int) -> None:
+def _spawn_checkpoint(stream_id: str, cache_key: tuple[str, str], latest_version: int, engine: Engine) -> None:
     from wisetraceloom import checkpoint as checkpoint_module
 
     def _compact() -> None:
         try:
-            checkpoint_module.compact_checkpoint(stream_id)
+            checkpoint_module.compact_checkpoint(stream_id, engine=engine)
             _last_checkpoint_version_cache[cache_key] = latest_version
         except Exception:
             # Failure is left unadvanced in the cache so the next interval's
@@ -417,14 +441,18 @@ def _spawn_checkpoint(stream_id: str, cache_key: tuple[str, str], latest_version
     thread.start()
 
 
-def _maybe_checkpoint(stream_id: str, latest_version: int) -> None:
+def _maybe_checkpoint(stream_id: str, latest_version: int, engine: Engine) -> None:
     from wisetraceloom import checkpoint as checkpoint_module
 
     config = get_storage_config()
-    cache_key = (get_db_path(), stream_id)
+    # Keyed by the engine's own URL, not get_db_path() — a region-routed
+    # stream (feature 2.5) lives in a different file than the default
+    # store, and the checkpoint-version cache must track each file's own
+    # checkpoint history independently, not conflate them.
+    cache_key = (str(engine.url), stream_id)
     last_checkpoint_version = _last_checkpoint_version_cache.get(cache_key)
     if last_checkpoint_version is None:
-        last_checkpoint_version = _load_last_checkpoint_version(stream_id)
+        last_checkpoint_version = _load_last_checkpoint_version(stream_id, engine)
         _last_checkpoint_version_cache[cache_key] = last_checkpoint_version
 
     if not checkpoint_module.should_checkpoint(
@@ -432,13 +460,15 @@ def _maybe_checkpoint(stream_id: str, latest_version: int) -> None:
     ):
         return
 
-    _spawn_checkpoint(stream_id, cache_key, latest_version)
+    _spawn_checkpoint(stream_id, cache_key, latest_version, engine)
 
 
-def _load_stream_state(stream_id: str, target_version: int, *, tenant_id: str | None = None) -> list[dict[str, Any]]:
+def _load_stream_state(
+    stream_id: str, target_version: int, *, tenant_id: str | None = None, engine: Engine | None = None
+) -> list[dict[str, Any]]:
     from wisetraceloom import checkpoint as checkpoint_module
 
-    with Session(get_engine()) as session:
+    with Session(engine or get_engine()) as session:
         best_checkpoint = session.exec(
             select(StorageCheckpoint)
             .where(StorageCheckpoint.stream_id == stream_id, StorageCheckpoint.version <= target_version)
@@ -483,8 +513,16 @@ def _load_stream_state(stream_id: str, target_version: int, *, tenant_id: str | 
 def read_as_of_version(stream_id: str, version: int, *, tenant_id: str | None = None) -> list[dict[str, Any]]:
     """Ordered list of commit payloads (`json.loads`'d) for `stream_id` with
     `version <= version`, reconciling the latest applicable checkpoint plus
-    the commits since it."""
-    rows = _load_stream_state(stream_id, version, tenant_id=tenant_id)
+    the commits since it.
+
+    The engine queried is resolved from `tenant_id` (feature 2.5's
+    `wisetraceloom.residency`) the same way `append_commit` resolves it for
+    writes — a region-routed tenant's reads come from that region's file.
+    Without a `tenant_id`, only the default store is queried; there is no
+    fan-out across every registered region (see `residency` module
+    docstring)."""
+    engine = resolve_engine(tenant_id) if tenant_id is not None else get_engine()
+    rows = _load_stream_state(stream_id, version, tenant_id=tenant_id, engine=engine)
     return [json.loads(row["payload"]) for row in rows]
 
 
@@ -493,7 +531,8 @@ def read_as_of_timestamp(stream_id: str, timestamp: datetime, *, tenant_id: str 
     `committed_at <= timestamp` for `stream_id`, then delegate to
     `read_as_of_version`. Returns `[]` if no commit exists at or before
     `timestamp`."""
-    with Session(get_engine()) as session:
+    engine = resolve_engine(tenant_id) if tenant_id is not None else get_engine()
+    with Session(engine) as session:
         version = session.exec(
             select(func.max(StorageCommit.version)).where(
                 StorageCommit.stream_id == stream_id, StorageCommit.committed_at <= timestamp
@@ -506,7 +545,8 @@ def read_as_of_timestamp(stream_id: str, timestamp: datetime, *, tenant_id: str 
 
 def read_latest(stream_id: str, *, tenant_id: str | None = None) -> list[dict[str, Any]]:
     """All commit payloads for `stream_id`, in version order."""
-    with Session(get_engine()) as session:
+    engine = resolve_engine(tenant_id) if tenant_id is not None else get_engine()
+    with Session(engine) as session:
         version = session.exec(
             select(func.max(StorageCommit.version)).where(StorageCommit.stream_id == stream_id)
         ).one()

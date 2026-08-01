@@ -21,6 +21,7 @@ from wisetraceloom.logging import bind_context, configure, get_logger
 from wisetraceloom.otel_export import set_export_config
 from wisetraceloom.prompts import fingerprint_prompt, register_prompt_version
 from wisetraceloom.redaction import presidio_available, set_redaction_config
+from wisetraceloom.residency import register_region, set_region_config
 from wisetraceloom.storage import append_commit, read_as_of_timestamp, read_as_of_version, read_latest, set_storage_config
 from wisetraceloom.tracecontext import extract_traceparent, inject_traceparent
 
@@ -47,12 +48,14 @@ __all__ = [
     "read_as_of_version",
     "read_latest",
     "register_prompt_version",
+    "register_region",
     "request_erasure",
     "set_db_path",
     "set_export_config",
     "set_pricing_config",
     "set_quota_config",
     "set_redaction_config",
+    "set_region_config",
     "set_storage_config",
     "tool_call",
     "trace_agent_step",

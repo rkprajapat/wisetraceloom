@@ -20,9 +20,10 @@ from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
-from wisetraceloom.config import get_db_path, get_engine
+from wisetraceloom.config import get_engine
 
 if TYPE_CHECKING:
     from wisetraceloom.storage import StorageCheckpoint
@@ -37,23 +38,45 @@ def should_checkpoint(latest_version: int, last_checkpoint_version: int, interva
     return latest_version > last_checkpoint_version and latest_version % interval == 0
 
 
-def default_checkpoint_dir() -> str:
-    return str(Path(get_db_path()).parent / "checkpoints")
+def default_checkpoint_dir(engine: Engine) -> str:
+    """Checkpoints for `engine`'s store live next to that store's own
+    SQLite file. For a region-routed engine (feature 2.5's
+    `wisetraceloom.residency`), this keeps the Parquet checkpoint data
+    physically co-located with the region's own commit log rather than
+    always defaulting under the primary store's directory — the latter
+    would silently defeat the point of routing that data to a specific
+    region in the first place."""
+    return str(Path(engine.url.database).parent / "checkpoints")
 
 
-def checkpoint_file_path(stream_id: str, version: int, checkpoint_dir: str) -> Path:
+def checkpoint_file_path(stream_id: str, version: int, checkpoint_dir: str, engine: Engine) -> Path:
+    # Namespaced by the engine's own db path (not just stream_id/version):
+    # two physically separate stores (default store + a region store, or
+    # two different regions) can each independently reach e.g. "spans"
+    # version 10 — without this, both would resolve to the identical
+    # Parquet path and overwrite each other's checkpoint data, even under
+    # an explicit shared `checkpoint_dir` override.
+    store_label = _STREAM_ID_SANITIZE_RE.sub("_", Path(str(engine.url.database)).stem)
     safe_stream_id = _STREAM_ID_SANITIZE_RE.sub("_", stream_id)
-    return Path(checkpoint_dir) / safe_stream_id / f"{version:020d}.checkpoint.parquet"
+    return Path(checkpoint_dir) / store_label / safe_stream_id / f"{version:020d}.checkpoint.parquet"
 
 
-def compact_checkpoint(stream_id: str) -> StorageCheckpoint | None:
+def compact_checkpoint(stream_id: str, *, engine: Engine | None = None) -> StorageCheckpoint | None:
     """Full-snapshot compaction of every commit in `stream_id` (version 1
     through the current max) into one Parquet file; upserts the
     `StorageCheckpoint` row for that `(stream_id, version)`. Returns `None`
-    if the stream has no commits yet."""
+    if the stream has no commits yet.
+
+    `engine` defaults to the shared default store (`get_engine()`) but a
+    region-routed stream (feature 2.5's `wisetraceloom.residency`) passes
+    its own region engine here — both the commits being compacted and the
+    `StorageCheckpoint` row recording that compaction must live in the same
+    file the commits themselves live in, or the checkpoint would silently
+    describe the wrong (or an empty) stream."""
     from wisetraceloom.storage import StorageCheckpoint, StorageCommit, get_storage_config
 
-    with Session(get_engine()) as session:
+    resolved_engine = engine or get_engine()
+    with Session(resolved_engine) as session:
         rows = session.exec(
             select(StorageCommit).where(StorageCommit.stream_id == stream_id).order_by(StorageCommit.version)
         ).all()
@@ -70,8 +93,8 @@ def compact_checkpoint(stream_id: str) -> StorageCheckpoint | None:
             return existing
 
         config = get_storage_config()
-        checkpoint_dir = config.checkpoint_dir or default_checkpoint_dir()
-        path = checkpoint_file_path(stream_id, version, checkpoint_dir)
+        checkpoint_dir = config.checkpoint_dir or default_checkpoint_dir(resolved_engine)
+        path = checkpoint_file_path(stream_id, version, checkpoint_dir, resolved_engine)
         path.parent.mkdir(parents=True, exist_ok=True)
 
         table = pa.Table.from_pylist(

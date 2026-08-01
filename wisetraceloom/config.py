@@ -138,6 +138,17 @@ def get_engine():
     return _engine()
 
 
+def get_engine_for_path(db_path: str):
+    """An engine for `db_path` specifically, rather than the process-wide
+    default (`get_db_path()`) — for callers that deliberately need a second,
+    separate SQLite file (e.g. `wisetraceloom.residency`'s region-routed
+    storage, feature 2.5). Uses the same cached, lock-protected, WAL-mode
+    engine construction as `get_engine()` (see `_get_engine`), so a
+    region's file gets identical concurrency/durability guarantees to the
+    default store, just at a different path."""
+    return _get_engine(db_path)
+
+
 def get_rotation_config(tenant_id: str | None = None) -> RotationConfig:
     """Resolve rotation config: tenant-specific row if present, else the
     global default row, else a built-in (not persisted) default."""

@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
 
+from sqlalchemy.engine import Engine
 from sqlmodel import Field, Session, SQLModel, select
 
 from wisetraceloom.config import get_engine
@@ -66,14 +67,21 @@ class ChainVerificationResult:
     reason: str | None = None
 
 
-def verify_chain(stream_id: str) -> ChainVerificationResult:
+def verify_chain(stream_id: str, *, engine: Engine | None = None) -> ChainVerificationResult:
     """Walk `stream_id`'s commits in version order, recomputing each
     `entry_hash` from its own stored fields and confirming it chains onto
     the previous entry's `entry_hash` — detects both payload tampering
     (recomputed hash no longer matches what's stored) and chain re-linking
     (a `prev_hash` pointing anywhere other than the true previous entry).
-    An empty stream has nothing to break, so it verifies `ok=True`."""
-    with Session(get_engine()) as session:
+    An empty stream has nothing to break, so it verifies `ok=True`.
+
+    `engine` defaults to the default store; pass the engine returned by
+    `wisetraceloom.residency.resolve_engine(tenant_id)` to verify a
+    region-routed stream (feature 2.5) — without it, this would silently
+    check the default store instead (finding zero commits there and
+    reporting a meaningless `ok=True`) rather than the data actually being
+    audited."""
+    with Session(engine or get_engine()) as session:
         commits = session.exec(
             select(StorageCommit).where(StorageCommit.stream_id == stream_id).order_by(StorageCommit.version)
         ).all()
@@ -139,12 +147,16 @@ class AnchorRecord(SQLModel, table=True):
     anchored_at: datetime = Field(default_factory=_utcnow)
 
 
-def anchor_commits(stream_id: str, sink: AnchorSink) -> AnchorRecord:
+def anchor_commits(stream_id: str, sink: AnchorSink, *, engine: Engine | None = None) -> AnchorRecord:
     """Compute the Merkle root over every commit currently in `stream_id`,
     hand `(stream_id, root)` to `sink` for external anchoring, and persist
-    the resulting `AnchorRecord`. Raises `ValueError` if the stream has no
-    commits yet — there is nothing to anchor."""
-    with Session(get_engine()) as session:
+    the resulting `AnchorRecord` — in the same store the commits were read
+    from, so a later `verify_anchor` re-checking this record against that
+    store finds a consistent picture. Raises `ValueError` if the stream has
+    no commits yet — there is nothing to anchor. See `verify_chain` for why
+    `engine` matters for a region-routed stream (feature 2.5)."""
+    resolved_engine = engine or get_engine()
+    with Session(resolved_engine) as session:
         commits = session.exec(
             select(StorageCommit).where(StorageCommit.stream_id == stream_id).order_by(StorageCommit.version)
         ).all()
@@ -154,7 +166,7 @@ def anchor_commits(stream_id: str, sink: AnchorSink) -> AnchorRecord:
     root = compute_merkle_root([commit.entry_hash for commit in commits])
     external_reference = sink(stream_id, root)
 
-    with Session(get_engine()) as session:
+    with Session(resolved_engine) as session:
         record = AnchorRecord(
             stream_id=stream_id, version=commits[-1].version, merkle_root=root, external_reference=external_reference
         )
@@ -164,15 +176,17 @@ def anchor_commits(stream_id: str, sink: AnchorSink) -> AnchorRecord:
         return record
 
 
-def verify_anchor(record: AnchorRecord) -> bool:
+def verify_anchor(record: AnchorRecord, *, engine: Engine | None = None) -> bool:
     """Recompute the Merkle root over `record.stream_id`'s commits
     `[1..record.version]` and compare against `record.merkle_root`. Only
     proves local consistency (recomputation matches what was anchored) —
     an operator who controls both this database and this function could
     tamper with both consistently, which is exactly why real tamper-evidence
     depends on checking `record.external_reference` against the actual
-    external anchor, outside this codebase's reach by design."""
-    with Session(get_engine()) as session:
+    external anchor, outside this codebase's reach by design. Pass the same
+    `engine` the record was anchored with (see `anchor_commits`) for a
+    region-routed stream."""
+    with Session(engine or get_engine()) as session:
         commits = session.exec(
             select(StorageCommit)
             .where(StorageCommit.stream_id == record.stream_id, StorageCommit.version <= record.version)
