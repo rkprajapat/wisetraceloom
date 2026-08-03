@@ -95,10 +95,15 @@ def test_confirm_erasure_appends_erasure_fact_without_pii():
     fact = facts[0]
     assert fact["subject_id"] == "alice"
     assert fact["erasure_request_id"] == request.id
-    assert fact["requested_by"] == "dpo@acme.com"
+    # feature 2.6's masking runs over every storage payload, including this
+    # one, so an email-shaped requester identity is scrubbed same as any
+    # other stored payload's would be — no exception carved out for this
+    # stream.
+    assert fact["requested_by"] == "[REDACTED_EMAIL]"
     assert fact["key_generations_destroyed"] == 1
     serialized = str(fact)
     assert "alice@example.com" not in serialized
+    assert "dpo@acme.com" not in serialized
 
 
 def test_subject_can_re_provision_key_after_erasure():

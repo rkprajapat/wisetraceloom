@@ -60,6 +60,7 @@ from sqlmodel import Field, Session, SQLModel, UniqueConstraint, func, select
 
 from wisetraceloom.config import get_db_path, get_engine
 from wisetraceloom.logging import get_logger
+from wisetraceloom.masking import apply_masking
 from wisetraceloom.residency import resolve_engine
 
 
@@ -284,8 +285,19 @@ def append_commit(
     when the write was actually requested (in tests, this manifested as a
     background write silently landing in a stale, differently-schema'd
     database once an earlier test's config override had already been torn
-    down by the time the queue drained)."""
+    down by the time the queue drained).
+
+    `payload` is run through `wisetraceloom.masking.apply_masking` (feature
+    2.6) before it is ever serialized or written — deliberately outside the
+    retry loop below (masking doesn't depend on the assigned version, so
+    there's no reason to redo it per retry) and deliberately not wrapped in
+    `wisetraceloom.failsafe.fail_open_context`: a `MaskingError` here must
+    propagate and block the write, not be swallowed the way instrumentation
+    failures are. `enqueue_append`'s background worker still catches it (as
+    it catches any write failure) and drops the write with a warning — the
+    payload is never persisted unmasked either way."""
     engine = engine or resolve_engine(tenant_id)
+    payload = apply_masking(payload)
     payload_json = json.dumps(payload, sort_keys=True, default=str)
 
     for attempt in range(max_retries):
