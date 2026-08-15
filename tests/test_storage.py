@@ -177,7 +177,9 @@ def test_tool_call_persists_span_to_storage():
     # durably written inline — wait for it to land before reading.
     storage.wait_for_pending_writes()
 
-    state = read_latest("spans")
+    from wisetraceloom.tenancy import isolated_stream_id
+
+    state = read_latest(isolated_stream_id("spans", "acme"), tenant_id="acme")
     tool_events = [row for row in state if row["tool_name"] == "search"]
     assert len(tool_events) == 1
     assert tool_events[0]["tenant_id"] == "acme"

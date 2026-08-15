@@ -37,18 +37,32 @@ from wisetraceloom.prompts import (
 from wisetraceloom.redaction import presidio_available, set_redaction_config
 from wisetraceloom.residency import register_region, set_region_config
 from wisetraceloom.storage import append_commit, read_as_of_timestamp, read_as_of_version, read_latest, set_storage_config
+from wisetraceloom.tenancy import (
+    AccessDeniedError,
+    TenancyError,
+    assert_viewer_access,
+    create_namespace,
+    create_tenant,
+    grant_role,
+    query_latest,
+    revoke_role,
+)
 from wisetraceloom.tracecontext import extract_traceparent, inject_traceparent
 
 __all__ = [
+    "AccessDeniedError",
     "agent_step",
     "anchor_commits",
     "append_commit",
+    "assert_viewer_access",
     "assert_within_quota",
     "bind_context",
     "check_spend_anomaly",
     "clear_prompt_alias",
     "confirm_erasure",
     "configure",
+    "create_namespace",
+    "create_tenant",
     "decrypt_for_subject",
     "encrypt_for_subject",
     "estimate_cost_usd",
@@ -58,10 +72,12 @@ __all__ = [
     "get_daily_spend",
     "get_eval_summary",
     "get_logger",
+    "grant_role",
     "inject_traceparent",
     "llm_call",
     "presidio_available",
     "PromptVersionError",
+    "query_latest",
     "read_as_of_timestamp",
     "read_as_of_version",
     "read_latest",
@@ -69,6 +85,7 @@ __all__ = [
     "register_region",
     "request_erasure",
     "resolve_prompt_alias",
+    "revoke_role",
     "set_db_path",
     "set_export_config",
     "set_golden_set",
@@ -80,6 +97,7 @@ __all__ = [
     "set_region_config",
     "set_regression_thresholds",
     "set_storage_config",
+    "TenancyError",
     "tool_call",
     "trace_agent_step",
     "trace_llm_call",

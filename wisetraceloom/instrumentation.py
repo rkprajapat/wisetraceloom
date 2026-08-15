@@ -35,6 +35,7 @@ from wisetraceloom.logging import get_logger
 from wisetraceloom.otel_export import export_agent_span, export_llm_span, export_tool_span
 from wisetraceloom.schema import AgentSpan, LLMSpan, ToolSpan
 from wisetraceloom.storage import enqueue_append
+from wisetraceloom.tenancy import isolated_stream_id
 from wisetraceloom.tracecontext import (
     bound_trace_context,
     current_span_id,
@@ -52,7 +53,12 @@ _SPAN_EVENT_NAMES = {
 }
 
 
-def _emit_span(span: AgentSpan | ToolSpan | LLMSpan, exporter: Callable[..., None]) -> None:
+def _emit_span(
+    span: AgentSpan | ToolSpan | LLMSpan,
+    exporter: Callable[..., None],
+    *,
+    namespace: str | None = None,
+) -> None:
     event_name = _SPAN_EVENT_NAMES[type(span)]
     with fail_open_context(f"emit_span:{type(span).__name__}"):
         get_logger("wisetraceloom.spans").info(event_name, **span.model_dump(mode="json"))
@@ -63,9 +69,17 @@ def _emit_span(span: AgentSpan | ToolSpan | LLMSpan, exporter: Callable[..., Non
     # write costs a few ms even on a fast SQLite path, which doesn't fit the
     # Stage 1 exit gate's <5% latency budget on every span (see storage.py's
     # module docstring for the durability trade-off this implies).
+    # Tenant-tagged spans go on a per-tenant/namespace stream (feature 2.9)
+    # so a later viewer query cannot replay another tenant's checkpoint.
+    # Untagged spans stay on the shared `"spans"` stream.
     with fail_open_context(f"store_span:{type(span).__name__}"):
+        stream_id = (
+            isolated_stream_id("spans", span.tenant_id, namespace)
+            if span.tenant_id is not None
+            else "spans"
+        )
         enqueue_append(
-            stream_id="spans",
+            stream_id=stream_id,
             record_type=event_name,
             payload=span.model_dump(mode="json"),
             tenant_id=span.tenant_id,
@@ -80,6 +94,7 @@ def agent_step(
     operation_name: str = "invoke_agent",
     conversation_id: str | None = None,
     tenant_id: str | None = None,
+    namespace: str | None = None,
     description: str | None = None,
     loop_iteration: int = 0,
 ) -> Iterator[AgentSpan]:
@@ -104,7 +119,7 @@ def agent_step(
             yield span
         finally:
             span.ended_at = datetime.now(timezone.utc)
-            _emit_span(span, export_agent_span)
+            _emit_span(span, export_agent_span, namespace=namespace)
 
 
 @contextlib.contextmanager
@@ -114,6 +129,7 @@ def tool_call(
     tool_type: str = "function",
     tool_call_id: str | None = None,
     tenant_id: str | None = None,
+    namespace: str | None = None,
     description: str | None = None,
 ) -> Iterator[ToolSpan]:
     """Instrument one tool call. Yields the `ToolSpan`; `success` is set to
@@ -142,7 +158,7 @@ def tool_call(
             raise
         finally:
             span.ended_at = datetime.now(timezone.utc)
-            _emit_span(span, export_tool_span)
+            _emit_span(span, export_tool_span, namespace=namespace)
 
 
 @contextlib.contextmanager
@@ -152,6 +168,7 @@ def llm_call(
     *,
     operation_name: str = "chat",
     tenant_id: str | None = None,
+    namespace: str | None = None,
     prompt_version_id: str | None = None,
     temperature: float | None = None,
     max_tokens: int | None = None,
@@ -179,7 +196,7 @@ def llm_call(
         finally:
             span.ended_at = datetime.now(timezone.utc)
             _attribute_cost(span)
-            _emit_span(span, export_llm_span)
+            _emit_span(span, export_llm_span, namespace=namespace)
 
 
 def _attribute_cost(span: LLMSpan) -> None:
