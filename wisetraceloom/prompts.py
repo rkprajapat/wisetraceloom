@@ -15,6 +15,12 @@ to, so audit identity stays intact. Aliases live in their own
 `(slot_name, alias)` mapping rather than an `aliases[]` column on the
 version row — an alias points at exactly one version per slot at a time,
 and promoting means moving that pointer, not rewriting version history.
+
+`production` promotion is regression-gated (PRD §8.3, feature 2.8) when
+the host has registered a golden set for the slot: a new version auto-runs
+that suite, and `set_prompt_alias(..., "production", ...)` refuses the
+move if pass rate / cost / p95 latency regressed past the configured
+caps. `canary`/`shadow` stay ungated. No golden set = no gate.
 """
 
 from __future__ import annotations
@@ -115,7 +121,13 @@ def register_prompt_version(
         session.add(row)
         session.commit()
         session.refresh(row)
-        return row
+
+    # Feature 2.8: new hash only. Repeat-hash returns above, so a version
+    # is eval'd once at detection, not on every subsequent sighting.
+    from wisetraceloom.evaluation import maybe_eval_on_detection
+
+    maybe_eval_on_detection(row, template)
+    return row
 
 
 def get_prompt_version(version_id: int) -> PromptVersion:
@@ -153,7 +165,9 @@ def _normalize_alias(alias: str) -> str:
 def set_prompt_alias(slot_name: str, alias: str, version_id: int) -> PromptAlias:
     """Point `alias` (e.g. `production` / `canary` / `shadow`) at `version_id`
     within `slot_name`. Replaces any prior pointer for the same alias — no
-    redeploy required to change which version an alias serves."""
+    redeploy required to change which version an alias serves. `production`
+    is regression-gated when a golden set is registered for the slot
+    (feature 2.8); other aliases are not."""
     alias = _normalize_alias(alias)
     if not alias:
         raise PromptVersionError("alias must be non-empty")
@@ -166,6 +180,11 @@ def set_prompt_alias(slot_name: str, alias: str, version_id: int) -> PromptAlias
             raise PromptVersionError(
                 f"version {version_id} belongs to slot {version.slot_name!r}, not {slot_name!r}"
             )
+
+        if alias == "production":
+            from wisetraceloom.evaluation import assert_production_promotion_allowed
+
+            assert_production_promotion_allowed(slot_name, version_id)
 
         row = session.exec(
             select(PromptAlias).where(
@@ -251,3 +270,8 @@ def list_prompt_aliases(slot_name: str) -> list[PromptAlias]:
         return list(
             session.exec(select(PromptAlias).where(PromptAlias.slot_name == slot_name)).all()
         )
+
+
+# Register EvalSummary on SQLModel.metadata before any get_engine()/create_all
+# so tests that only import this module still get the feature-2.8 table.
+import wisetraceloom.evaluation as _evaluation  # noqa: E402, F401

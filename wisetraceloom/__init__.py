@@ -19,6 +19,12 @@ from wisetraceloom.instrumentation import (
 )
 from wisetraceloom.logging import bind_context, configure, get_logger
 from wisetraceloom.otel_export import set_export_config
+from wisetraceloom.evaluation import (
+    EvalRegressionError,
+    get_eval_summary,
+    set_golden_set,
+    set_regression_thresholds,
+)
 from wisetraceloom.prompts import (
     PromptVersionError,
     clear_prompt_alias,
@@ -46,9 +52,11 @@ __all__ = [
     "decrypt_for_subject",
     "encrypt_for_subject",
     "estimate_cost_usd",
+    "EvalRegressionError",
     "extract_traceparent",
     "fingerprint_prompt",
     "get_daily_spend",
+    "get_eval_summary",
     "get_logger",
     "inject_traceparent",
     "llm_call",
@@ -63,12 +71,14 @@ __all__ = [
     "resolve_prompt_alias",
     "set_db_path",
     "set_export_config",
+    "set_golden_set",
     "set_pricing_config",
     "set_prompt_alias",
     "set_prompt_title",
     "set_quota_config",
     "set_redaction_config",
     "set_region_config",
+    "set_regression_thresholds",
     "set_storage_config",
     "tool_call",
     "trace_agent_step",
