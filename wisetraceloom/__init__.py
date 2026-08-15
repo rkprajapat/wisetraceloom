@@ -19,7 +19,15 @@ from wisetraceloom.instrumentation import (
 )
 from wisetraceloom.logging import bind_context, configure, get_logger
 from wisetraceloom.otel_export import set_export_config
-from wisetraceloom.prompts import fingerprint_prompt, register_prompt_version
+from wisetraceloom.prompts import (
+    PromptVersionError,
+    clear_prompt_alias,
+    fingerprint_prompt,
+    register_prompt_version,
+    resolve_prompt_alias,
+    set_prompt_alias,
+    set_prompt_title,
+)
 from wisetraceloom.redaction import presidio_available, set_redaction_config
 from wisetraceloom.residency import register_region, set_region_config
 from wisetraceloom.storage import append_commit, read_as_of_timestamp, read_as_of_version, read_latest, set_storage_config
@@ -32,6 +40,7 @@ __all__ = [
     "assert_within_quota",
     "bind_context",
     "check_spend_anomaly",
+    "clear_prompt_alias",
     "confirm_erasure",
     "configure",
     "decrypt_for_subject",
@@ -44,15 +53,19 @@ __all__ = [
     "inject_traceparent",
     "llm_call",
     "presidio_available",
+    "PromptVersionError",
     "read_as_of_timestamp",
     "read_as_of_version",
     "read_latest",
     "register_prompt_version",
     "register_region",
     "request_erasure",
+    "resolve_prompt_alias",
     "set_db_path",
     "set_export_config",
     "set_pricing_config",
+    "set_prompt_alias",
+    "set_prompt_title",
     "set_quota_config",
     "set_redaction_config",
     "set_region_config",

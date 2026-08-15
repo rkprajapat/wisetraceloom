@@ -1,7 +1,18 @@
 import pytest
 
 import wisetraceloom.config as config
-from wisetraceloom.prompts import fingerprint_prompt, register_prompt_version
+from wisetraceloom.prompts import (
+    PROMOTION_ALIASES,
+    PromptVersionError,
+    clear_prompt_alias,
+    fingerprint_prompt,
+    get_prompt_version,
+    list_prompt_aliases,
+    register_prompt_version,
+    resolve_prompt_alias,
+    set_prompt_alias,
+    set_prompt_title,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -72,3 +83,99 @@ def test_different_slots_get_independent_version_numbering():
     assert router_v1.version_number == 1
     assert greeter_v1.version_number == 1
     assert router_v1.slot_name != greeter_v1.slot_name
+
+
+# --- feature 2.7: human titles + promotion aliases ---
+
+
+def test_set_prompt_title_updates_title_without_changing_identity():
+    version = register_prompt_version("router_agent.system_prompt", "You are a router.")
+    original_hash = version.content_hash
+    original_number = version.version_number
+
+    updated = set_prompt_title(version.id, "Stricter tool-selection guardrail")
+    assert updated.title == "Stricter tool-selection guardrail"
+    assert updated.content_hash == original_hash
+    assert updated.version_number == original_number
+    assert get_prompt_version(version.id).title == "Stricter tool-selection guardrail"
+
+
+def test_set_prompt_title_rejects_empty_and_unknown_id():
+    version = register_prompt_version("router_agent.system_prompt", "You are a router.")
+    with pytest.raises(PromptVersionError, match="non-empty"):
+        set_prompt_title(version.id, "   ")
+    with pytest.raises(PromptVersionError, match="unknown"):
+        set_prompt_title(999_999, "ghost")
+
+
+def test_set_prompt_alias_points_production_canary_shadow_without_redeploy():
+    assert PROMOTION_ALIASES == frozenset({"production", "canary", "shadow"})
+    v1 = register_prompt_version("router_agent.system_prompt", "v1 template")
+    v2 = register_prompt_version("router_agent.system_prompt", "v2 template")
+
+    set_prompt_alias("router_agent.system_prompt", "production", v1.id)
+    set_prompt_alias("router_agent.system_prompt", "canary", v2.id)
+    set_prompt_alias("router_agent.system_prompt", "shadow", v2.id)
+
+    assert resolve_prompt_alias("router_agent.system_prompt", "production").id == v1.id
+    assert resolve_prompt_alias("router_agent.system_prompt", "canary").id == v2.id
+    assert resolve_prompt_alias("router_agent.system_prompt", "shadow").id == v2.id
+
+    # Promote: move production pointer to v2 — no code deploy, just metadata.
+    set_prompt_alias("router_agent.system_prompt", "production", v2.id)
+    assert resolve_prompt_alias("router_agent.system_prompt", "production").id == v2.id
+
+
+def test_set_prompt_alias_rejects_slot_mismatch_and_unknown_version():
+    router = register_prompt_version("router_agent.system_prompt", "router")
+    greeter = register_prompt_version("greeter.system_prompt", "greeter")
+
+    with pytest.raises(PromptVersionError, match="belongs to slot"):
+        set_prompt_alias("router_agent.system_prompt", "production", greeter.id)
+    with pytest.raises(PromptVersionError, match="unknown"):
+        set_prompt_alias("router_agent.system_prompt", "production", 999_999)
+    with pytest.raises(PromptVersionError, match="non-empty"):
+        set_prompt_alias("router_agent.system_prompt", "  ", router.id)
+
+
+def test_clear_prompt_alias_is_idempotent():
+    v1 = register_prompt_version("router_agent.system_prompt", "v1")
+    set_prompt_alias("router_agent.system_prompt", "canary", v1.id)
+    clear_prompt_alias("router_agent.system_prompt", "canary")
+    assert resolve_prompt_alias("router_agent.system_prompt", "canary") is None
+    clear_prompt_alias("router_agent.system_prompt", "canary")  # no-op
+    assert list_prompt_aliases("router_agent.system_prompt") == []
+
+
+def test_aliases_are_isolated_per_slot():
+    a = register_prompt_version("slot.a", "A")
+    b = register_prompt_version("slot.b", "B")
+    set_prompt_alias("slot.a", "production", a.id)
+    set_prompt_alias("slot.b", "production", b.id)
+    assert resolve_prompt_alias("slot.a", "production").id == a.id
+    assert resolve_prompt_alias("slot.b", "production").id == b.id
+    assert len(list_prompt_aliases("slot.a")) == 1
+
+
+def test_alias_names_are_case_insensitive():
+    v1 = register_prompt_version("router_agent.system_prompt", "v1")
+    set_prompt_alias("router_agent.system_prompt", "Production", v1.id)
+    assert resolve_prompt_alias("router_agent.system_prompt", "PRODUCTION").id == v1.id
+    clear_prompt_alias("router_agent.system_prompt", "production")
+    assert resolve_prompt_alias("router_agent.system_prompt", "Production") is None
+
+
+def test_resolve_raises_when_alias_points_at_missing_version():
+    from sqlmodel import Session
+
+    from wisetraceloom.config import get_engine
+    from wisetraceloom.prompts import PromptVersion
+
+    v1 = register_prompt_version("router_agent.system_prompt", "v1")
+    set_prompt_alias("router_agent.system_prompt", "canary", v1.id)
+    with Session(get_engine()) as session:
+        row = session.get(PromptVersion, v1.id)
+        session.delete(row)
+        session.commit()
+    with pytest.raises(PromptVersionError, match="missing version"):
+        resolve_prompt_alias("router_agent.system_prompt", "canary")
